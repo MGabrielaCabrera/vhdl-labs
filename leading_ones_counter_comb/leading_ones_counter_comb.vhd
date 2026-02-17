@@ -42,7 +42,8 @@ begin
 
     -- Generate the final count based on the AND array    
     final_count(BITS_IN-1) <= to_unsigned(1, BITS_OUT) when and_array(BITS_IN-1) = '1'
-                          else (others => '0');    final_count_generate: for i in BITS_IN-2 downto 0 generate
+                          else (others => '0');    
+    final_count_generate: for i in BITS_IN-2 downto 0 generate
         final_count(i) <= unsigned(final_count(i+1)) + 1 when and_array(i) = '1' else final_count(i+1);
     end generate final_count_generate;
 
