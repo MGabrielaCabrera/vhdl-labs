@@ -10,6 +10,19 @@ architecture tb of leading_ones_counter_comb_tb is
     -- Constants
     constant BITS_IN : natural := 8;
     constant BITS_OUT : natural := 4;
+    constant STIMULUS_FILE : string := "leading_ones_counter_stimulus.txt";
+    
+    -- Component declaration
+    component leading_ones_counter_comb is
+        generic (
+            BITS_IN: natural:=8;
+            BITS_OUT: natural:=4
+        );
+        port (
+            input_vector  : in  std_logic_vector;
+            leading_ones_count : out std_logic_vector
+        );
+    end component leading_ones_counter_comb;
     
     -- Signals for testbench
     signal input_sig  : std_logic_vector(BITS_IN - 1 downto 0);
@@ -17,7 +30,7 @@ architecture tb of leading_ones_counter_comb_tb is
 
 begin
     -- Instantiate DUT
-    dut : entity work.leading_ones_counter_comb
+    dut : leading_ones_counter_comb
         generic map (
             BITS_IN => BITS_IN,
             BITS_OUT => BITS_OUT
@@ -29,7 +42,7 @@ begin
 
     -- Stimulus process
     stimulus : process
-        file stimulus_file : text open read_mode is "leading_ones_counter_stimulus.txt";
+        file stimulus_file : text open read_mode is STIMULUS_FILE;
         variable line_buf : line;
         variable input_vector : std_logic_vector(BITS_IN - 1 downto 0);
         variable expected_output : std_logic_vector(BITS_OUT - 1 downto 0);
@@ -51,3 +64,21 @@ begin
     end process stimulus;
 
 end architecture tb;
+
+-- Configuration for RTL architecture
+configuration config_rtl of leading_ones_counter_comb_tb is
+    for tb
+        for dut : leading_ones_counter_comb
+            use entity work.leading_ones_counter_comb(rtl);
+        end for;
+    end for;
+end configuration config_rtl;
+
+-- Configuration for behavioral architecture
+configuration config_behavioral of leading_ones_counter_comb_tb is
+    for tb
+        for dut : leading_ones_counter_comb
+            use entity work.leading_ones_counter_comb(behavioral);
+        end for;
+    end for;
+end configuration config_behavioral;
