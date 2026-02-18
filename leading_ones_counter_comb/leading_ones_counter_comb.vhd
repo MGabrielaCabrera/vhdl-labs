@@ -9,6 +9,10 @@
 -- Date:        29/01/2026
 -- Version:     1.0
 --------------------------------------------------------------------------------
+-- To analyze the RTL architecture, use:
+-- ghdl -a leading_ones_counter_comb.vhd
+-- To elaborate the design, use:
+-- ghdl -e leading_ones_counter_comb.vhd
 
 library ieee;
 use ieee.std_logic_1164.all;
@@ -17,16 +21,17 @@ use ieee.math_real.all;
 
 entity leading_ones_counter_comb is
     generic (
-        BITS_IN: natural:=8;
-        BITS_OUT: natural:=integer(ceil(log2(real(BITS_IN+1))))
+        BITS_IN: natural:=8
     );
     port (
         input_vector  : in  std_logic_vector(BITS_IN - 1 downto 0);
-        leading_ones_count  : out std_logic_vector(BITS_OUT - 1 downto 0)
+        leading_ones_count  : out std_logic_vector(integer(ceil(log2(real(BITS_IN+1)))) - 1 downto 0)
     );
 end entity leading_ones_counter_comb;
 
 architecture rtl of leading_ones_counter_comb is
+    constant BITS_OUT : natural := integer(ceil(log2(real(BITS_IN+1))));
+
     type unsigned_array is array (natural range <>) of 
         unsigned(BITS_OUT - 1 downto 0);
     signal and_array: unsigned(BITS_IN - 1 downto 0);
@@ -66,7 +71,7 @@ begin
                 exit;
             end if;
         end loop;
-        leading_ones_count <= std_logic_vector(to_unsigned(count, BITS_OUT));
+        leading_ones_count <= std_logic_vector(to_unsigned(count, integer(ceil(log2(real(BITS_IN+1))))));
     end process counter_process;
 
 end architecture behavioral;
