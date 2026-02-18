@@ -51,3 +51,22 @@ begin
     leading_ones_count <= std_logic_vector(final_count(0));
 
 end architecture rtl;
+
+architecture behavioral of leading_ones_counter_comb is
+begin
+    -- Combinational process for leading ones counter
+    counter_process : process (input_vector)
+        variable count : integer;
+    begin
+        count := 0;
+        for i in BITS_IN - 1 downto 0 loop
+            if input_vector(i) = '1' then
+                count := count + 1;
+            else
+                exit;
+            end if;
+        end loop;
+        leading_ones_count <= std_logic_vector(to_unsigned(count, BITS_OUT));
+    end process counter_process;
+
+end architecture behavioral;
