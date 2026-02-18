@@ -1,7 +1,15 @@
+-- To analyze the RTL architecture, use:
+-- ghdl -a -fsynopsys leading_ones_counter_comb_tb.vhd
+-- To elaborate the testbench with the RTL architecture, use:
+-- ghdl -e -fsynopsys config_rtl
+-- To run the testbench with the RTL architecture, use:
+-- ghdl -r -fsynopsys config_rtl
+
 library ieee;
 use ieee.std_logic_1164.all;
 use std.textio.all;
 use ieee.std_logic_textio.all;
+use ieee.math_real.all;
 
 entity leading_ones_counter_comb_tb is
 end entity leading_ones_counter_comb_tb;
@@ -9,18 +17,17 @@ end entity leading_ones_counter_comb_tb;
 architecture tb of leading_ones_counter_comb_tb is
     -- Constants
     constant BITS_IN : natural := 8;
-    constant BITS_OUT : natural := 4;
-    constant STIMULUS_FILE : string := "leading_ones_counter_stimulus.txt";
+    constant BITS_OUT : natural := integer(ceil(log2(real(BITS_IN+1))));
+    constant STIMULUS_FILE_NAME : string := "leading_ones_counter_stimulus.txt";
     
     -- Component declaration
     component leading_ones_counter_comb is
         generic (
-            BITS_IN: natural:=8;
-            BITS_OUT: natural:=4
+            BITS_IN: natural:=BITS_IN
         );
         port (
-            input_vector  : in  std_logic_vector;
-            leading_ones_count : out std_logic_vector
+            input_vector  : in  std_logic_vector(BITS_IN - 1 downto 0);
+            leading_ones_count : out std_logic_vector(BITS_OUT - 1 downto 0)
         );
     end component leading_ones_counter_comb;
     
@@ -32,8 +39,7 @@ begin
     -- Instantiate DUT
     dut : leading_ones_counter_comb
         generic map (
-            BITS_IN => BITS_IN,
-            BITS_OUT => BITS_OUT
+            BITS_IN => BITS_IN
         )
         port map (
             input_vector => input_sig,
@@ -42,10 +48,19 @@ begin
 
     -- Stimulus process
     stimulus : process
-        file stimulus_file : text open read_mode is STIMULUS_FILE;
+        file stimulus_file : text open read_mode is STIMULUS_FILE_NAME;
         variable line_buf : line;
         variable input_vector : std_logic_vector(BITS_IN - 1 downto 0);
         variable expected_output : std_logic_vector(BITS_OUT - 1 downto 0);
+
+        function to_string(slv : std_logic_vector) return string is
+            variable result : string(1 to slv'length);
+        begin
+            for i in slv'range loop
+                result(slv'length - i) := std_logic'image(slv(i))(2);
+            end loop;
+            return result;
+        end;
     begin
         while not endfile(stimulus_file) loop
             readline(stimulus_file, line_buf);
