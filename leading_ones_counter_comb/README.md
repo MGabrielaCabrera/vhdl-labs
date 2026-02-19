@@ -17,7 +17,7 @@ array(0) → XOR → XOR → XOR → ...
 
 This creates a long combinational path, which may lead to critical timing issues.
 
-### Behavioral Architecture
+### Behavioral architecture
 This approach is much simpler and is still purely combinational because the process does not use a clock in its execution.
 
 ## Simulation
