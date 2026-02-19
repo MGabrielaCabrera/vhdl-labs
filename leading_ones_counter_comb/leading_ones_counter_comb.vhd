@@ -9,11 +9,6 @@
 -- Date:        29/01/2026
 -- Version:     1.0
 --------------------------------------------------------------------------------
--- To analyze the RTL architecture, use:
--- ghdl -a leading_ones_counter_comb.vhd
--- To elaborate the design, use:
--- ghdl -e leading_ones_counter_comb.vhd
-
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;

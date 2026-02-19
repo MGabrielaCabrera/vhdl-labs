@@ -1,10 +1,3 @@
--- To analyze the RTL architecture, use:
--- ghdl -a -fsynopsys leading_ones_counter_comb_tb.vhd
--- To elaborate the testbench with the RTL architecture, use:
--- ghdl -e -fsynopsys config_rtl
--- To run the testbench with the RTL architecture, use:
--- ghdl -r -fsynopsys config_rtl
-
 library ieee;
 use ieee.std_logic_1164.all;
 use std.textio.all;
