@@ -18,6 +18,8 @@
 mono_crash.*
 
 # Build results
+[Bb]uild/
+[Ww]aves/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
