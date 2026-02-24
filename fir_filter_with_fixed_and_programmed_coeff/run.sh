@@ -3,8 +3,12 @@ set -e
 
 mkdir -p build waves
 
+echo "Analyzing package files"
+ghdl -a -fsynopsys --workdir=build *_pkg.vhd
+
 echo "Analyzing design files"
-ghdl -a -fsynopsys --workdir=build *.vhd
+ghdl -a -fsynopsys --workdir=build fir_filter.vhd
+ghdl -a -fsynopsys --workdir=build fir_filter_tb.vhd
 
 echo "Elaborating chain_arranged_adders testbench"
 ghdl -e -fsynopsys --workdir=build -o build/config_rtl_chain_arranged_adders config_rtl_chain_arranged_adders
