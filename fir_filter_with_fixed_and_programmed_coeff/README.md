@@ -26,5 +26,5 @@ Finally, verification could be further strengthened by applying additional stimu
 **Direct-form FIR simulation**:
 ![Waveform_1](simulation_outputs/waves_config_rtl_chain_arranged.png "Direct-form FIR simulation")
 
-**Transposed-form FIR simulation**
+**Transposed-form FIR simulation**:
 ![Waveform_2](simulation_outputs/waves_config_rtl_pipeline_arranged.png "Transposed-form FIR simulation")
