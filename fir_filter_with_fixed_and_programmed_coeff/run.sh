@@ -7,6 +7,7 @@ echo "Analyzing package files"
 ghdl -a -fsynopsys --workdir=build *_pkg.vhd
 
 echo "Analyzing design files"
+ghdl -a -fsynopsys --workdir=build coef_bank.vhd
 ghdl -a -fsynopsys --workdir=build fir_filter.vhd
 ghdl -a -fsynopsys --workdir=build fir_filter_tb.vhd
 
