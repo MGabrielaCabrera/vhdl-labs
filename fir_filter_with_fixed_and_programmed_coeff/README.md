@@ -1,5 +1,5 @@
 ## Lab description
-This VHDL project implements a parameterizable FIR filter using two alternative architectures derived from the reference structures in [Book Circuit Desing with VHDL, Volnei A, Pedroni, Fig. 2.35]: a direct-form chain of adders and a pipelined transposed version. Shared types, constants, and default coefficients are defined in a dedicated package to ensure modularity and code reuse. The direct architecture performs sequential accumulation, resulting in a longer critical path, while the pipelined architecture registers intermediate sums to improve timing without changing the transfer function. 
+This VHDL project implements a parameterizable FIR filter using two alternative architectures derived from the reference structures in [Book: *Circuit Desing with VHDL, Volnei A, Pedroni*, Fig. 2.35]: a direct-form chain of adders and a pipelined transposed version. Shared types, constants, and default coefficients are defined in a dedicated package to ensure modularity and code reuse. The direct architecture performs sequential accumulation, resulting in a longer critical path, while the pipelined architecture registers intermediate sums to improve timing without changing the transfer function. 
 
 The design was initially developed with fixed coefficients and later extended to support runtime-programmable coefficients through a dedicated write interface that guarantees safe updates and filter integrity. 
 
@@ -23,6 +23,8 @@ It is worth noting that the second architecture, as presented in the reference b
 
 Finally, verification could be further strengthened by applying additional stimulus signals beyond the impulse test, such as sinusoids, random data, or boundary-value patterns.
 
+**Direct-form FIR simulation**:
 ![Waveform_1](simulation_outputs/waves_config_rtl_chain_arranged.png "Direct-form FIR simulation")
 
+**Transposed-form FIR simulation**
 ![Waveform_2](simulation_outputs/waves_config_rtl_pipeline_arranged.png "Transposed-form FIR simulation")
