@@ -5,7 +5,7 @@ The state machine requires 11 states in total. These include a dedicated reset s
 
 The FSM is implemented as a Mealy machine, meaning the output depends on both the current state and the input signal. This allows the detection flag to be asserted in the same clock cycle that the last bit of a sequence is received, reducing latency. However, it can be easily converted into a Moore machine by modifying line 114 of sequences_generator.vhd so that the output depends on current_state instead of next_state, which would introduce a one-cycle delay. Finally, both output signals are registered on the rising edge of the clock, ensuring synchronous and stable operation.
 
-![Waveform_1](images\fsm_diagram.png "FSM Diagram")
+![Waveform_1](images/fsm_diagram.png "FSM Diagram")
 
 
 ## Verification description
