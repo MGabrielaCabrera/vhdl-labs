@@ -1,0 +1,4 @@
+## Lab description
+This project implements a synthesizable AXI-Lite slave peripheral in VHDL designed to control an external FIR DSP module through memory-mapped registers and dedicated control signals. The peripheral acts as a bridge between a processor and the DSP, translating AXI transactions into configuration, control, and status interactions. It includes an AXI interface, a register bank, and a control FSM that manages DSP operation, synchronization, and safe coefficient updates.
+
+In the initial phase, data and coefficients are transferred to the DSP through internal register-driven signals, prioritizing simplicity and architectural clarity. A later phase will extend the design with high-throughput data paths using DMA or AXI-Stream interfaces to support continuous streaming workloads. The modular structure allows the DSP block to be replaced or upgraded independently while keeping the processor interface stable.
