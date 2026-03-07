@@ -70,14 +70,14 @@ architecture rtl of axi_lite_slave_if is
     -- W_WAIT    : write data received, waiting for write address
     -- EXEC      : both received, performing write, asserting BVALID
     -- BRESP     : waiting for BREADY handshake
-    type t_write_state is (IDLE, AW_WAIT, W_WAIT, EXEC, BRESP);
+    type t_write_state is (IDLE, HANDSHAKE, AW_HANDSHAKE, W_HANDSHAKE, AW_WAIT, W_WAIT, EXEC, BRESP);
     signal write_state : t_write_state := IDLE;
 
     -- Read FSM
     -- IDLE      : waiting for AR channel
     -- EXEC      : address captured, one cycle for register read latency
     -- RRESP     : asserting RVALID, waiting for RREADY handshake
-    type t_read_state is (IDLE, EXEC, RRESP);
+    type t_read_state is (IDLE, HANDSHAKE, EXEC, WAITING_DATA_STABLE, DATA_STABLE, RRESP);
     signal read_state : t_read_state := IDLE;
 
     -- Internal registers to hold captured transaction data
@@ -95,15 +95,7 @@ architecture rtl of axi_lite_slave_if is
     -- Address validation helpers
     function addr_valid(addr : std_logic_vector(31 downto 0)) return std_logic is
     begin
-        case addr(5 downto 2) is
-            when "0000" | "0001" | "0010" | "0011" | "0100" | "0101" => return '1';
-            when others => return '0';
-        end case;
-    end function;
-
-    function addr_misaligned(addr : std_logic_vector(31 downto 0)) return std_logic is
-    begin
-        if addr(1 downto 0) /= "00" then
+        if unsigned(addr) <= x"00000014" and addr(1 downto 0) = "00" then
             return '1';
         else
             return '0';
@@ -135,8 +127,8 @@ begin
             reg_write_en    <= '0';
             reg_waddr       <= (others => '0');
             reg_wdata       <= (others => '0');
-            s_axi_awready   <= '1';
-            s_axi_wready    <= '1';
+            s_axi_awready   <= '0';
+            s_axi_wready    <= '0';
             s_axi_bvalid    <= '0';
             s_axi_bresp     <= "00";
 
@@ -144,64 +136,66 @@ begin
 
             -- Default: deassert single-cycle strobes
             reg_write_en <= '0';
-
+            s_axi_awready <= '0';
+            s_axi_wready  <= '0';
             case write_state is
                 -- -------------------------------------------------------
                 when IDLE =>
-                    s_axi_awready <= '1';
-                    s_axi_wready  <= '1';
                     s_axi_bvalid  <= '0';
 
                     if s_axi_awvalid = '1' and s_axi_wvalid = '1' then
-                        -- Both channels presented simultaneously
-                        reg_awaddr_int  <= s_axi_awaddr;
-                        reg_wdata_int   <= axi_wdata_strb;
-                        write_error_lat <= addr_misaligned(s_axi_awaddr) or
-                                           not addr_valid(s_axi_awaddr);
-                        s_axi_awready   <= '0';
-                        s_axi_wready    <= '0';
-                        write_state     <= EXEC;
-
+                        -- Both address and data presented simultaneously
+                        write_state     <= HANDSHAKE;
                     elsif s_axi_awvalid = '1' then
-                        -- Only address presented
-                        reg_awaddr_int  <= s_axi_awaddr;
-                        write_error_lat <= addr_misaligned(s_axi_awaddr) or
-                                           not addr_valid(s_axi_awaddr);
-                        s_axi_awready   <= '0';
-                        write_state     <= AW_WAIT;
-
+                        write_state     <= AW_HANDSHAKE;
                     elsif s_axi_wvalid = '1' then
-                        -- Only data presented
-                        reg_wdata_int <= axi_wdata_strb;
-                        s_axi_wready  <= '0';
-                        write_state   <= W_WAIT;
+                        write_state   <= W_HANDSHAKE;
                     end if;
+                --------------------------------------------------------
+                -- Both address and data received in the same cycle, can proceed to execute write immediately
+                when HANDSHAKE =>
+                    reg_awaddr_int  <= s_axi_awaddr;
+                    reg_wdata_int   <= axi_wdata_strb;
+                    write_error_lat <= not addr_valid(s_axi_awaddr);
+                    s_axi_awready   <= '1';
+                    s_axi_wready    <= '1';
+                    write_state     <= EXEC;
+                ---------------------------------------------------------
+                when AW_HANDSHAKE =>
+                    reg_awaddr_int  <= s_axi_awaddr;
+                    write_error_lat <= not addr_valid(s_axi_awaddr);
+                    s_axi_awready   <= '1';
+                    write_state     <= AW_WAIT;
+                --------------------------------------------------------
+                when W_HANDSHAKE =>
+                    reg_wdata_int   <= axi_wdata_strb;
+                    s_axi_wready    <= '1';
+                    write_state     <= W_WAIT;
 
                 -- -------------------------------------------------------
                 -- Address received first, waiting for data
                 when AW_WAIT =>
-                    s_axi_wready <= '1';
                     if s_axi_wvalid = '1' then
                         reg_wdata_int <= axi_wdata_strb;
-                        s_axi_wready  <= '0';
+                        s_axi_wready <= '1';
                         write_state   <= EXEC;
                     end if;
 
                 -- -------------------------------------------------------
                 -- Data received first, waiting for address
                 when W_WAIT =>
-                    s_axi_awready <= '1';
                     if s_axi_awvalid = '1' then
                         reg_awaddr_int  <= s_axi_awaddr;
-                        write_error_lat <= addr_misaligned(s_axi_awaddr) or
-                                           not addr_valid(s_axi_awaddr);
-                        s_axi_awready   <= '0';
+                        write_error_lat <= not addr_valid(s_axi_awaddr);
+                        s_axi_awready   <= '1';
                         write_state     <= EXEC;
                     end if;
 
                 -- -------------------------------------------------------
                 -- Perform the write and assert BVALID
                 when EXEC =>
+                    s_axi_awready <= '0';
+                    s_axi_wready  <= '0';
                     if write_error_lat = '0' then
                         reg_write_en <= '1';           -- single-cycle write pulse
                         reg_waddr    <= reg_awaddr_int;
@@ -237,7 +231,7 @@ begin
             read_error_lat <= '0';
             reg_read_en    <= '0';
             reg_raddr      <= (others => '0');
-            s_axi_arready  <= '1';
+            s_axi_arready  <= '0';
             s_axi_rvalid   <= '0';
             s_axi_rdata    <= (others => '0');
             s_axi_rresp    <= "00";
@@ -246,25 +240,26 @@ begin
 
             -- Default: deassert single-cycle strobes
             reg_read_en <= '0';
+            s_axi_arready <= '0'; -- Only asserted for one cycle when address is captured
 
             case read_state is
                 -- -------------------------------------------------------
                 when IDLE =>
-                    s_axi_arready <= '1';
                     s_axi_rvalid  <= '0';
-
                     if s_axi_arvalid = '1' then
-                        reg_araddr_int <= s_axi_araddr;
-                        read_error_lat <= addr_misaligned(s_axi_araddr) or
-                                          not addr_valid(s_axi_araddr);
-                        s_axi_arready  <= '0';
-                        read_state     <= EXEC;
+                        read_state     <= HANDSHAKE;
                     end if;
-
+                
+                when HANDSHAKE =>
+                    reg_araddr_int <= s_axi_araddr;
+                    read_error_lat <= not addr_valid(s_axi_araddr);
+                    s_axi_arready  <= '1';
+                    read_state     <= EXEC;
                 -- -------------------------------------------------------
                 -- Assert read enable for one cycle so the register
                 -- can provide data; capture result on the next cycle
                 when EXEC =>
+                    s_axi_arready  <= '0';
                     if read_error_lat = '0' then
                         reg_read_en  <= '1';
                         reg_raddr    <= reg_araddr_int;
@@ -272,11 +267,17 @@ begin
                     else
                         s_axi_rresp  <= "10";           -- SLVERR
                     end if;
+
+                    read_state   <= WAITING_DATA_STABLE;
+                -- -------------------------------------------------------
+                when WAITING_DATA_STABLE =>
+                    read_State <= DATA_STABLE;
+                --------------------------------------------------------
+                when DATA_STABLE =>
                     -- Sample register data, 1-cycle read latency
                     s_axi_rdata  <= reg_rdata;
                     s_axi_rvalid <= '1';
                     read_state   <= RRESP;
-
                 -- -------------------------------------------------------
                 -- Hold RVALID/RDATA until master asserts RREADY
                 when RRESP =>
