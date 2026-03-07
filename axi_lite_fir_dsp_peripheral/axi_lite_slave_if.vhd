@@ -66,6 +66,9 @@ architecture rtl of axi_lite_slave_if is
 
     -- Write FSM
     -- IDLE      : waiting for AW and W channels
+    -- HANDSHAKE : both AWVALID and WVALID at the same time, capture both immediately
+    -- AW_HANDSHAKE : only AWVALID, waiting for WVALID
+    -- W_HANDSHAKE  : only WVALID, waiting for AWVALID
     -- AW_WAIT   : write address received, waiting for write data
     -- W_WAIT    : write data received, waiting for write address
     -- EXEC      : both received, performing write, asserting BVALID
@@ -75,7 +78,10 @@ architecture rtl of axi_lite_slave_if is
 
     -- Read FSM
     -- IDLE      : waiting for AR channel
+    -- HANDSHAKE : ARVALID asserted, capture address
     -- EXEC      : address captured, one cycle for register read latency
+    -- WAITING_DATA_STABLE : waiting one cycle for read data to stabilize
+    -- DATA_STABLE : read data should be stable, assert RVALID
     -- RRESP     : asserting RVALID, waiting for RREADY handshake
     type t_read_state is (IDLE, HANDSHAKE, EXEC, WAITING_DATA_STABLE, DATA_STABLE, RRESP);
     signal read_state : t_read_state := IDLE;
@@ -142,17 +148,19 @@ begin
                 -- -------------------------------------------------------
                 when IDLE =>
                     s_axi_bvalid  <= '0';
-
+                    -- The ready signals will be asserted in the next cycle to force the master to hold both address
+                    -- and data stable for capture
                     if s_axi_awvalid = '1' and s_axi_wvalid = '1' then
                         -- Both address and data presented simultaneously
                         write_state     <= HANDSHAKE;
+                    -- If only one is valid, capture that one and wait for the other
                     elsif s_axi_awvalid = '1' then
                         write_state     <= AW_HANDSHAKE;
                     elsif s_axi_wvalid = '1' then
                         write_state   <= W_HANDSHAKE;
                     end if;
                 --------------------------------------------------------
-                -- Both address and data received in the same cycle, can proceed to execute write immediately
+                -- handshake state: both address and data valid at the same time, capture both immediately
                 when HANDSHAKE =>
                     reg_awaddr_int  <= s_axi_awaddr;
                     reg_wdata_int   <= axi_wdata_strb;
@@ -161,17 +169,18 @@ begin
                     s_axi_wready    <= '1';
                     write_state     <= EXEC;
                 ---------------------------------------------------------
+                -- Address handshake state, waiting for data
                 when AW_HANDSHAKE =>
                     reg_awaddr_int  <= s_axi_awaddr;
                     write_error_lat <= not addr_valid(s_axi_awaddr);
                     s_axi_awready   <= '1';
                     write_state     <= AW_WAIT;
-                --------------------------------------------------------
+                ---------------------------------------------------------
+                -- Data handshake state, waiting for address
                 when W_HANDSHAKE =>
                     reg_wdata_int   <= axi_wdata_strb;
                     s_axi_wready    <= '1';
                     write_state     <= W_WAIT;
-
                 -- -------------------------------------------------------
                 -- Address received first, waiting for data
                 when AW_WAIT =>
@@ -180,7 +189,6 @@ begin
                         s_axi_wready <= '1';
                         write_state   <= EXEC;
                     end if;
-
                 -- -------------------------------------------------------
                 -- Data received first, waiting for address
                 when W_WAIT =>
@@ -190,7 +198,6 @@ begin
                         s_axi_awready   <= '1';
                         write_state     <= EXEC;
                     end if;
-
                 -- -------------------------------------------------------
                 -- Perform the write and assert BVALID
                 when EXEC =>
@@ -206,7 +213,6 @@ begin
                     end if;
                     s_axi_bvalid <= '1';
                     write_state  <= BRESP;
-
                 -- -------------------------------------------------------
                 -- Wait for master to accept the write response
                 when BRESP =>
@@ -238,7 +244,6 @@ begin
 
         elsif rising_edge(clk) then
 
-            -- Default: deassert single-cycle strobes
             reg_read_en <= '0';
             s_axi_arready <= '0'; -- Only asserted for one cycle when address is captured
 
@@ -249,8 +254,8 @@ begin
                     if s_axi_arvalid = '1' then
                         read_state     <= HANDSHAKE;
                     end if;
-                
-                when HANDSHAKE =>
+                    -- -------------------------------------------------------
+                    when HANDSHAKE =>
                     reg_araddr_int <= s_axi_araddr;
                     read_error_lat <= not addr_valid(s_axi_araddr);
                     s_axi_arready  <= '1';
@@ -274,7 +279,7 @@ begin
                     read_State <= DATA_STABLE;
                 --------------------------------------------------------
                 when DATA_STABLE =>
-                    -- Sample register data, 1-cycle read latency
+                    -- Sample register data
                     s_axi_rdata  <= reg_rdata;
                     s_axi_rvalid <= '1';
                     read_state   <= RRESP;
