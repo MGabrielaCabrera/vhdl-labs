@@ -3,4 +3,6 @@ This project implements a synthesizable AXI-Lite slave peripheral in VHDL design
 
 In the initial phase, data and coefficients are transferred to the DSP through internal register-driven signals, prioritizing simplicity and architectural clarity. A later phase will extend the design with high-throughput data paths using DMA or AXI-Stream interfaces to support continuous streaming workloads. The modular structure allows the DSP block to be replaced or upgraded independently while keeping the processor interface stable.
 
-The spec can be found in doc/AXI-Lite FIR DSP Peripheral - Design Spec.pdf
+**The spec can be found in doc/AXI-Lite FIR DSP Peripheral - Design Spec.pdf**
+
+**The simulation results can be found in AXI-Lite FIR DSP Peripheral - Verification.pdf**
