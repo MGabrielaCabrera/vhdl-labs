@@ -1,3 +1,23 @@
+--------------------------------------------------------------------------------
+-- Engineer:    Gabriela Cabrera
+--
+-- Design:      Testbench - AXI-Lite Slave Interface for external FIR DSP module
+-- Module:      axi_lite_slave_if_tb
+-- Description: Functional testbench with assertions covering:
+--                T1  - Write to register 0 and verify response
+--                T2  - Write to register 1 and verify response
+--                T3  - Read back register 0 and verify data
+--                T4  - Read back register 1 and verify data
+--                T5  - Write with partial byte strobes (upper two bytes only)
+--                T6  - Write to misaligned address -> expect SLVERR
+--                T7  - Write to out-of-range address -> expect SLVERR
+--                T8  - Read from misaligned address -> expect SLVERR
+--                T9  - Read from out-of-range address -> expect SLVERR
+--                T10 - Back-to-back writes to consecutive registers
+--                T11 - Write then immediate read (reg 3)
+-- Date:        05/03/2026
+-- Version:     1.0
+--------------------------------------------------------------------------------
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
