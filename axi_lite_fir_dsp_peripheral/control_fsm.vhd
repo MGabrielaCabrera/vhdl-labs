@@ -54,7 +54,8 @@ entity control_fsm is
         -- Register map outputs (to AXI-Lite memory map)
         -- bit 0: ready | bit 1: error | bit 2: busy
         reg_status  : out std_logic_vector(2 downto 0);
-        reg_data_out : out std_logic_vector(31 downto 0)
+        reg_data_out : out std_logic_vector(31 downto 0);
+        reg_data_out_strobe : out std_logic
     );
 end entity control_fsm;
 
@@ -70,6 +71,7 @@ architecture rtl of control_fsm is
     -- state register process)
     signal reg_data_out_int   : std_logic_vector(31 downto 0) := (others => '0');
     signal sample_reg_data_int : std_logic_vector(31 downto 0) := (others => '0');
+    signal reg_data_out_strobe_int : std_logic := '0';
 
 begin
 
@@ -98,8 +100,6 @@ begin
         dsp_data_out_valid
     )
     begin
-        -- Default: stay in current state
-        next_state <= current_state;
 
         case current_state is
 
@@ -147,13 +147,7 @@ begin
     -- Process 3: Output logic (Mealy based on next_state)
     -- All DSP control outputs are driven combinationally from next_state so
     -- that they are valid in the same cycle the state is entered.
-    -- Passthrough signals (dsp_enable, dsp_reset, dsp_mode) always reflect
-    -- the register map regardless of FSM state.
-    p_outputs : process(
-        next_state,
-        reg_enable,
-        coeff_write_strobe,
-        sample_write_strobe)
+    p_outputs : process(all)
     begin
         -- ---------------------------------------------------------------------
         -- Defaults (avoid latches)
@@ -222,13 +216,17 @@ begin
     begin
         if rst_n = '0' then
             reg_data_out_int <= (others => '0');
+            dsp_data_out_ready <= '0';
+            reg_data_out_strobe_int <= '0';
         elsif rising_edge(clk) then
             if dsp_data_out_valid = '1' then
                 reg_data_out_int <= std_logic_vector(
                                         resize(unsigned(dsp_data_out), 32));
                 dsp_data_out_ready <= '1';
+                reg_data_out_strobe_int <= '1';
             else
                 dsp_data_out_ready <= '0';
+                reg_data_out_strobe_int <= '0';
             end if;
             
             -- Capture the input sample into an internal register to avoid problems 
@@ -241,6 +239,7 @@ begin
     end process p_reg_capture;
 
     reg_data_out <= reg_data_out_int;
+    reg_data_out_strobe <= reg_data_out_strobe_int;
 
 
 end architecture rtl;
