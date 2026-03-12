@@ -72,6 +72,8 @@ architecture rtl of control_fsm is
     signal reg_data_out_int   : std_logic_vector(31 downto 0) := (others => '0');
     signal sample_reg_data_int : std_logic_vector(31 downto 0) := (others => '0');
     signal reg_data_out_strobe_int : std_logic := '0';
+    signal dsp_data_out_ready_int : std_logic := '0';
+    signal dsp_data_out_valid_last : std_logic := '0';
 
 begin
 
@@ -91,14 +93,7 @@ begin
     -- Computes the next state based on current state and inputs:
     --   sample_write_strobe, coeff_write_strobe,
     --   dsp_data_in_ready, dsp_data_out_valid, reg_enable
-    p_next_state : process(
-        current_state,
-        reg_enable,
-        sample_write_strobe,
-        coeff_write_strobe,
-        dsp_data_in_ready,
-        dsp_data_out_valid
-    )
+    p_next_state : process(all)
     begin
 
         case current_state is
@@ -156,31 +151,17 @@ begin
         dsp_coeff_data     <= (others => '0');
         dsp_coeff_addr     <= (others => '0');
         dsp_coeff_we       <= '0';
-        reg_status         <= "001";    -- ready by default
 
         -- ---------------------------------------------------------------------
         -- Output assignments based on NEXT state (Mealy)
         -- ---------------------------------------------------------------------
         case next_state is
-
             -- -----------------------------------------------------------------
             when IDLE =>
-                if coeff_write_strobe = '1' and reg_enable = '1' then
-                    -- Coefficient load requested but DSP is enabled (error)
-                    reg_status <= "010"; -- error
-                elsif sample_write_strobe = '1' and reg_enable = '0' then
-                    -- Sample write requested and DSP is disabled (valid)
-                    reg_status <= "010"; -- error
-                else
-                    -- Ready, not busy, no error
-                    reg_status <= "001";
-                end if;
                 dsp_data_in_valid <= '0';
 
             -- -----------------------------------------------------------------
             when SEND =>
-                -- Busy: sending sample to DSP
-                reg_status        <= "100";
                 dsp_data_in       <= sample_reg_data_int(15 downto 0);
                 dsp_data_in_valid <= '1';
 
@@ -188,12 +169,8 @@ begin
             when WAIT_RESULT =>
                 dsp_data_in_valid <= '0';
 
-                -- Busy: waiting for DSP to produce the result
-                reg_status <= "100";
             -- -----------------------------------------------------------------
             when LOAD_COEFF =>
-                -- Busy for the single write-enable cycle
-                reg_status     <= "100";
                 dsp_coeff_data <= reg_coeff_data;
                 dsp_coeff_addr <= reg_coeff_addr;
                 dsp_coeff_we   <= '1';
@@ -203,11 +180,16 @@ begin
 
             -- -----------------------------------------------------------------
             when others =>
-                reg_status <= "001";
                 -- Just to avoid a latch on this signal
                 dsp_data_in_valid <= '0';
         end case;
     end process p_outputs;
+
+    reg_status(0) <= '1' when (next_state = IDLE and coeff_write_strobe = '0' and sample_write_strobe = '0')
+                            else '0'; -- ready bit
+    reg_status(1) <= '1' when (next_state = IDLE and coeff_write_strobe = '1' and reg_enable = '1') or
+                            (next_state = IDLE and sample_write_strobe = '1' and reg_enable = '0') else '0'; -- error bit
+    reg_status(2) <= '1' when (next_state = SEND) or (next_state = WAIT_RESULT) or (next_state = LOAD_COEFF) else '0'; -- busy bit
 
     -- Registered internal signals
     -- reg_data_out_int holds the last captured DSP output across cycles so
@@ -216,16 +198,17 @@ begin
     begin
         if rst_n = '0' then
             reg_data_out_int <= (others => '0');
-            dsp_data_out_ready <= '0';
+            dsp_data_out_ready_int <= '0';
             reg_data_out_strobe_int <= '0';
         elsif rising_edge(clk) then
-            if dsp_data_out_valid = '1' then
+            dsp_data_out_valid_last <= dsp_data_out_valid;
+            if dsp_data_out_valid = '1' and dsp_data_out_valid_last = '0' then
                 reg_data_out_int <= std_logic_vector(
                                         resize(unsigned(dsp_data_out), 32));
-                dsp_data_out_ready <= '1';
+                dsp_data_out_ready_int <= '1';
                 reg_data_out_strobe_int <= '1';
             else
-                dsp_data_out_ready <= '0';
+                dsp_data_out_ready_int <= '0';
                 reg_data_out_strobe_int <= '0';
             end if;
             
@@ -240,6 +223,7 @@ begin
 
     reg_data_out <= reg_data_out_int;
     reg_data_out_strobe <= reg_data_out_strobe_int;
+    dsp_data_out_ready <= dsp_data_out_ready_int;
 
 
 end architecture rtl;
