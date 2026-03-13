@@ -43,8 +43,7 @@ entity control_fsm is
         -- Register map inputs (from AXI-Lite memory map)
         reg_enable           : in  std_logic;
         reg_reset            : in  std_logic;
-        -- Mode select: 00=Normal FIR, 01=Bypass, 10=Test pattern, 11=Reserved
-        reg_mode             : in  std_logic_vector(1 downto 0);
+        reg_mode             : in  std_logic_vector(1 downto 0); -- 00=Normal FIR, 01=Bypass, 10=Test pattern, 11=Reserved
         reg_coeff_data       : in  std_logic_vector(15 downto 0);
         reg_coeff_addr       : in  std_logic_vector(7 downto 0);
         reg_data_in          : in  std_logic_vector(31 downto 0);
