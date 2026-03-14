@@ -247,7 +247,8 @@ begin
             report "FAIL: RVALID should be deasserted after reset" severity error;
 
         -- ---------------------------------------------------------------
-         -- Test 1: Write to register 0 (address 0x00) and verify response
+        -- Test 1: Write to register 0 (address 0x00) and verify response
+        -- ---------------------------------------------------------------
         report("Test 1: Write to register 0 and verify response") severity note;
         axi_write(x"00000000", x"DEADBEEF");
 
@@ -258,6 +259,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 2: Write to register 1 (address 0x04)
+        -- ---------------------------------------------------------------
         report("Test 2: Write to register 1 and verify response") severity note;
         axi_write(x"00000004", x"CAFEBABE");
 
@@ -268,6 +270,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 3: Read back register 0 and verify data
+        -- ---------------------------------------------------------------
         report("Test 3: Read back register 0 and verify data") severity note;
         axi_read(x"00000000");
 
@@ -279,6 +282,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 4: Read back register 1 and verify data
+        -- ---------------------------------------------------------------
         report("Test 4: Read back register 1 and verify data") severity note;
         axi_read(x"00000004");
 
@@ -292,6 +296,7 @@ begin
         -- Test 5: Write with partial byte strobes (upper two bytes only)
         -- Write 0x12345678 with strobe 0b1100 -> only bytes [3:2] updated
         -- reg 2 starts at 0x00, so result should be 0x12340000
+        -- ---------------------------------------------------------------
         report("Test 5: Write with partial byte strobes (upper two bytes only)") severity note;        
         axi_write(x"00000008", x"00000000");  -- clear reg 2 first
         axi_write(x"00000008", x"12345678", "1100");
@@ -302,6 +307,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 6: Write to misaligned address -> expect SLVERR
+        -- ---------------------------------------------------------------
         report("Test 6: Write to misaligned address -> expect SLVERR") severity note;
         axi_write(x"00000001", x"AAAAAAAA");
 
@@ -310,6 +316,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 7: Write to out-of-range address -> expect SLVERR
+        -- ---------------------------------------------------------------
         report("Test 7: Write to out-of-range address -> expect SLVERR") severity note;
         axi_write(x"00000040", x"BBBBBBBB");
 
@@ -318,6 +325,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 8: Read from misaligned address -> expect SLVERR
+        -- ---------------------------------------------------------------
         report("Test 8: Read from misaligned address -> expect SLVERR") severity note;
         axi_read(x"00000003");
 
@@ -326,6 +334,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 9: Read from out-of-range address -> expect SLVERR
+        -- ---------------------------------------------------------------
         report("Test 9: Read from out-of-range address -> expect SLVERR") severity note;
         axi_read(x"00000040");
 
@@ -334,6 +343,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 10: Back-to-back writes to consecutive registers
+        -- ---------------------------------------------------------------
         report("Test 10: Back-to-back writes to consecutive registers") severity note;
         axi_write(x"0000000C", x"11111111");
         axi_write(x"00000010", x"22222222");
@@ -348,6 +358,7 @@ begin
 
         -- ---------------------------------------------------------------
         -- Test 11: Write then immediate read (reg 3)
+        -- ---------------------------------------------------------------
         report("Test 11: Write then immediate read (reg 3)") severity note;
         axi_write(x"0000000C", x"ABCD1234");
         axi_read(x"0000000C");
@@ -358,9 +369,10 @@ begin
 
         -- ---------------------------------------------------------------
         -- End of simulation
+        -- ---------------------------------------------------------------
         wait for CLK_PERIOD * 5;
         assert false
-            report "End of simulation - all tests passed" severity note;
+            report "End of simulation" severity note;
         wait;
 
     end process;
