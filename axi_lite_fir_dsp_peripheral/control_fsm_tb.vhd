@@ -105,7 +105,7 @@ begin
 	-- Clock generation
 	clk_process : process
 	begin
-		while now < 1000 ns loop
+		while now < 700 ns loop
 			clk <= '1'; wait for CLK_PERIOD/2;
 			clk <= '0'; wait for CLK_PERIOD/2;
 		end loop;
@@ -636,9 +636,8 @@ begin
 
         -----------------------------------------------------------------------
         -- End of simulation
-        -----------------------------------------------------------------------
         wait for CLK_PERIOD * 5;
-        report "End of simulation - all tests passed" severity note;
+        report "End of simulation" severity note;
         wait;
 
     end process stim_proc;
