@@ -8,6 +8,8 @@ ghdl -a --std=08 -fsynopsys --workdir=build axi_lite_slave_if.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build axi_lite_slave_if_tb.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build control_fsm.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build control_fsm_tb.vhd
+ghdl -a --std=08 -fsynopsys --workdir=build register_bank.vhd
+ghdl -a --std=08 -fsynopsys --workdir=build register_bank_tb.vhd
 
 echo "Elaborating axi_lite_slave_if testbench"
 ghdl -e --std=08 -fsynopsys --workdir=build -o build/axi_lite_slave_if_tb.exe axi_lite_slave_if_tb
@@ -26,6 +28,15 @@ build/control_fsm_tb.exe --fst=waves/waves_control_fsm_tb.fst
 
 echo "Opening waveform viewer (only if the fst file exists)"
 [ -f waves/waves_control_fsm_tb.fst ] && gtkwave waves/waves_control_fsm_tb.fst &  
+
+echo "Elaborating register_bank testbench"
+ghdl -e --std=08 -fsynopsys --workdir=build -o build/register_bank_tb.exe register_bank_tb
+
+echo "Running register_bank_tb testbench. Waveforms saved to waves/waves_register_bank_tb.fst"
+build/register_bank_tb.exe --fst=waves/waves_register_bank_tb.fst
+
+echo "Opening waveform viewer (only if the fst file exists)"
+[ -f waves/waves_register_bank_tb.fst ] && gtkwave waves/waves_register_bank_tb.fst &  
 
 
 
