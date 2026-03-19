@@ -80,10 +80,9 @@ architecture rtl of axi_lite_slave_if is
     -- IDLE      : waiting for AR channel
     -- HANDSHAKE : ARVALID asserted, capture address
     -- EXEC      : address captured, one cycle for register read latency
-    -- WAITING_DATA_STABLE : waiting one cycle for read data to stabilize
     -- DATA_STABLE : read data should be stable, assert RVALID
     -- RRESP     : asserting RVALID, waiting for RREADY handshake
-    type t_read_state is (IDLE, HANDSHAKE, EXEC, WAITING_DATA_STABLE, DATA_STABLE, RRESP);
+    type t_read_state is (IDLE, HANDSHAKE, EXEC, DATA_STABLE, RRESP);
     signal read_state : t_read_state := IDLE;
 
     -- Internal registers to hold captured transaction data
@@ -273,10 +272,7 @@ begin
                         s_axi_rresp  <= "10";           -- SLVERR
                     end if;
 
-                    read_state   <= WAITING_DATA_STABLE;
-                -- -------------------------------------------------------
-                when WAITING_DATA_STABLE =>
-                    read_State <= DATA_STABLE;
+                    read_state   <= DATA_STABLE;
                 --------------------------------------------------------
                 when DATA_STABLE =>
                     -- Sample register data
