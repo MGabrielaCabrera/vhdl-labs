@@ -147,10 +147,10 @@ begin
 
     -- Simple register file model
     -- Writes and reads are performed based on the internal control signals
-    regfile_proc : process(clk)
+    regfile_proc : process(reg_write_en, reg_read_en) --clk)
         variable idx : integer;
     begin
-        if rising_edge(clk) then
+        --if rising_edge(clk) then
             if reg_write_en = '1' then
                 idx := to_integer(unsigned(reg_waddr(5 downto 2)));
                 regfile(idx) <= reg_wdata;
@@ -159,7 +159,7 @@ begin
                 idx := to_integer(unsigned(reg_raddr(5 downto 2)));
                 reg_rdata <= regfile(idx);
             end if;
-        end if;
+        --end if;
     end process;
 
      -- Stimulus process
