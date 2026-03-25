@@ -5,6 +5,7 @@ mkdir -p build waves
 
 echo "Analyzing design files"
 ghdl -a -fsynopsys --workdir=build *.vhd
+ghdl -a -fsynopsys --workdir=build tb/*.vhd
 
 echo "Elaborating config_rtl testbench"
 ghdl -e -fsynopsys --workdir=build -o build/config_rtl config_rtl
