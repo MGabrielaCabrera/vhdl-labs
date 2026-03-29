@@ -79,7 +79,8 @@ interface axi_lite_if(input logic clk, input logic rst_n);
 
    clocking cb @(posedge clk);
       default input #1step output;
-         input awready, wready, bvalid, arready, rvalid;
+         input awready, wready, bvalid, arready, rvalid,
+               rdata, rresp, bresp;
          output awaddr, awvalid, wdata, wvalid, wstrb, bready,
                araddr, arvalid, rready;
    endclocking
@@ -155,7 +156,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
    const int ADDR_OOB = 32'h40; // Address for out of range access
 
    // Task to perform a write transaction
-   task write_transaction(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] strb);
+   task write_transaction(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] strb = 4'b1111);
         @(axi_if.cb);
         axi_if.cb.awaddr <= addr;
         axi_if.cb.awvalid <= 1;
@@ -213,28 +214,117 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- rst_n is held low.
         ---------------------------------------------------------------*/
       $display("Test 1: Verifying AXI output reset state");
+
       @(posedge axi_if.cb);
-      t1_bvalid: assert (axi_if.cb.bvalid == 0) else $error("bvalid should be 0 after reset");
-      t1_arready: assert (axi_if.cb.arready == 0) else $error("arready should be 0 after reset");
-      t1_rvalid: assert (axi_if.cb.rvalid == 0) else $error("rvalid should be 0 after reset");
-      t1_dsp_enable: assert (dsp_if.cb.dsp_enable == 0) else $error("DSP enable should be 0 after reset");
-      t1_dsp_reset: assert (dsp_if.cb.dsp_reset == 0) else $error("DSP reset should be 0 after reset");
-      t1_dsp_data_in_valid: assert (dsp_if.cb.dsp_data_in_valid == 0) else $error("DSP data_in_valid should be 0 after reset");
-      t1_dsp_data_out_ready: assert (dsp_if.cb.dsp_data_out_ready == 0) else $error("DSP data_out_ready should be 0 after reset");
-      t1_dsp_coeff_we: assert (dsp_if.cb.dsp_coeff_we == 0) else $error("DSP coeff_we should be 0 after reset");
+      t1_bvalid: assert (axi_if.cb.bvalid == 0) 
+         else $error("bvalid should be 0 after reset");
+      t1_arready: assert (axi_if.cb.arready == 0) 
+         else $error("arready should be 0 after reset");
+      t1_rvalid: assert (axi_if.cb.rvalid == 0) 
+         else $error("rvalid should be 0 after reset");
+      t1_dsp_enable: assert (dsp_if.cb.dsp_enable == 0) 
+         else $error("DSP enable should be 0 after reset");
+      t1_dsp_reset: assert (dsp_if.cb.dsp_reset == 0) 
+         else $error("DSP reset should be 0 after reset");
+      t1_dsp_data_in_valid: assert (dsp_if.cb.dsp_data_in_valid == 0) 
+         else $error("DSP data_in_valid should be 0 after reset");
+      t1_dsp_data_out_ready: assert (dsp_if.cb.dsp_data_out_ready == 0) 
+         else $error("DSP data_out_ready should be 0 after reset");
+      t1_dsp_coeff_we: assert (dsp_if.cb.dsp_coeff_we == 0) 
+         else $error("DSP coeff_we should be 0 after reset");
       $display("Test 1 passed: AXI outputs and DSP control signals are in reset state");
 
       /*-----------------------------------------------------------------------
-      -- Test 2: AXI write to CTRL and readback
-      -- Writing enable=1, reset=1, mode="10" via AXI must reach the DSP
-      -- outputs and be readable back at address 0x00.
-      -- CTRL encoding: bit0=enable, bit1=reset, bit3:2=mode â 0x0B
+        -- Test 2: AXI write to CTRL and readback
+        -- Writing enable=1, reset=1, mode="10" via AXI must reach the DSP
+        -- outputs and be readable back at address 0x00.
+        -- CTRL encoding: bit0=enable, bit1=reset, bit3:2=mode --> 0x0B
       -----------------------------------------------------------------------*/
       $display("Test 2: AXI write to CTRL and readback");
 
+      write_transaction(ADDR_CTRL, 32'h0B); // Write to CTRL register
+      // Wait for the DSP interface to reflect the changes
+      @(posedge dsp_if.cb);
+      t2_dsp_enable: assert (dsp_if.cb.dsp_enable == 1) 
+         else $error("DSP enable should be 1 after writing to CTRL");
+      t2_dsp_reset: assert (dsp_if.cb.dsp_reset == 1) 
+         else $error("DSP reset should be 1 after writing to CTRL");
+      t2_dsp_mode: assert (dsp_if.cb.dsp_mode == 2) 
+         else $error("DSP mode should be 2 after writing to CTRL");
+      $display("DSP interface reflects CTRL settings correctly");
 
+      read_transaction(ADDR_CTRL); // Read back CTRL register
+      // Sample rdata for checking
+      @(axi_if.cb);
+      t2_rdata: assert (axi_if.cb.rdata == 32'h0B) 
+         else $error("Readback data mismatch: expected 0x0B, got %h", axi_if.cb.rdata);
 
-       #100 $finish; // End simulation after some time
+      $display("Readback from CTRL register is correct");
+      $display("Test 2 passed: AXI write to CTRL and readback verified");
+    
+      /*-----------------------------------------------------------------------
+        -- Test 3: CTRL reserved bits are forced to zero
+        -- Writing 0xFFFFFFFF to CTRL must only store bits [3:0]; all upper
+        -- bits must read back as zero through the full AXI path.
+      -----------------------------------------------------------------------*/
+      $display("Test 3: CTRL reserved bits are forced to zero");
+
+      write_transaction(ADDR_CTRL, 32'hFFFFFFFF); // Write to CTRL register
+      read_transaction(ADDR_CTRL); // Read back CTRL register
+
+      // Sample rdata for checking
+      @(axi_if.cb);
+      t3_rdata_reserved_bits: assert (axi_if.cb.rdata[31:4] == 28'h00) 
+         else $error("CTRL reserved bits [31:4] must read as zero, got %h", axi_if.cb.rdata[31:4]);
+      t3_rdata: assert (axi_if.cb.rdata[3:0] == 4'hF) 
+         else $error("CTRL writable bits [3:0] should all be '1', got %h", axi_if.cb.rdata[3:0]);
+      
+      // Restore
+      write_transaction(ADDR_CTRL, 32'h00); // Write to CTRL register
+
+      $display("Test 3 passed:  CTRL reserved bits are forced to zero verified");
+
+      /*-----------------------------------------------------------------------
+        -- Test 4: AXI write to CTRL enables DSP (dsp_enable propagation)
+        -- Verifies that writing bit 0 of CTRL makes dsp_enable go high, and
+        -- clearing it makes it go low again.
+      -----------------------------------------------------------------------*/
+      $display("Test 4: Verifying CTRL enable bit propagates to dsp_enable");
+
+      write_transaction(ADDR_CTRL, 32'h01); // Set enable bit
+      @(posedge dsp_if.cb);
+      t4_dsp_enable_set: assert (dsp_if.cb.dsp_enable == 1) 
+         else $error("DSP enable should be 1 after setting enable bit in CTRL");
+      t4_dsp_reset_unchanged: assert (dsp_if.cb.dsp_reset == 0) 
+         else $error("DSP reset should remain 0 after setting enable bit in CTRL");
+      t4_dsp_mode_unchanged: assert (dsp_if.cb.dsp_mode == 0) 
+         else $error("DSP mode should remain 0 after setting enable bit in CTRL");
+      
+      write_transaction(ADDR_CTRL, 32'h00); // Clear enable bit
+      @(posedge dsp_if.cb);
+      t4_dsp_enable_clear: assert (dsp_if.cb.dsp_enable == 0) 
+         else $error("DSP enable should be 0 after clearing enable bit in CTRL"); 
+
+      /*-----------------------------------------------------------------------
+        -- T5: AXI write to STATUS is silently ignored (RO register)
+        -- STATUS must not change as a result of a software AXI write.
+        -- The response must still be OKAY (write accepted by AXI slave).
+      -----------------------------------------------------------------------*/
+      $display("Test 5: Verifying STATUS is read-only (AXI write ignored)");
+   
+      write_transaction(ADDR_STATUS, 32'hFFFFFFFF); // Attempt to write to STATUS register
+      // Check that STATUS did not change
+      read_transaction(ADDR_STATUS); // Read back STATUS register
+      @(axi_if.cb);
+      t5_status_unchanged: assert (axi_if.cb.rdata[31:3] == 29'h00) 
+         else $error("STATUS register should remain unchanged at 0x00000000, got %h", axi_if.cb.rdata[31:3]);
+      t5_s_axi_bresp_okay: assert (axi_if.cb.bresp == 2'b00) 
+         else $error("AXI write to STATUS should return OKAY response, got %b", axi_if.cb.bresp);
+
+      $display("Test 5 passed: STATUS register is read-only and write is ignored");
+    
+    
+    #100 $stop; // Stop simulation after some time ("finish" would close ModelSim)
    end 
 
    // Instantiate the AXI Lite Slave Interface
