@@ -6,6 +6,12 @@ module top_level_wrapper_tb;
    bit clk, rst_n;
    always #5 clk = ~clk; // 100 MHz clock
 
+   initial begin
+      @(posedge clk);
+      rst_n = 0;
+      #20 rst_n = 1; // Release reset after 20 ns
+   end
+
    // Instantiate the AXI Lite interface
    axi_lite_if axi_if(clk, rst_n);
 
@@ -13,7 +19,7 @@ module top_level_wrapper_tb;
    external_dsp_if dsp_if(clk, rst_n);
 
    // Instantiate the testbench program
-   test axi_tb(axi_if.TB, dsp_if.TB, clk, rst_n);
+   test axi_tb(axi_if.TB, dsp_if.TB);
 
    // Instantiate the DUT (Device Under Test)
    top_level_wrapper dut (
@@ -73,15 +79,14 @@ interface axi_lite_if(input logic clk, input logic rst_n);
 
    clocking cb @(posedge clk);
       default input #1step output;
+         input awready, wready, bvalid, arready, rvalid;
+         output awaddr, awvalid, wdata, wvalid, wstrb, bready,
+               araddr, arvalid, rready;
    endclocking
 
    // MODPORTS for driving and sampling signals
    // TB modport not really needed because the clocking block is used, but included for clarity
-    modport TB (
-        input awready, wready, bvalid, arready, rvalid,
-        output awaddr, awvalid, wdata, wvalid, wstrb, bready,
-                 araddr, arvalid, rready
-    );
+    modport TB (clocking cb);
 
     modport DUT (
         input awaddr, awvalid, wdata, wvalid, wstrb, bready,
@@ -115,23 +120,22 @@ interface external_dsp_if(input logic clk, input logic rst_n);
    // Clocking block for the DSP interface
    clocking cb @(posedge clk);
       default input #1step output;
+         output dsp_data_out, dsp_data_in_ready, dsp_data_out_valid;
+         input dsp_data_in, dsp_enable, dsp_reset, dsp_mode, dsp_data_in_valid,
+               dsp_data_out_ready, dsp_coeff_data, dsp_coeff_addr, dsp_coeff_we;
    endclocking
 
-      modport DSP (
-         output dsp_data_in, dsp_enable, dsp_reset, dsp_mode, dsp_data_in_valid,
-               dsp_data_out_ready, dsp_coeff_data, dsp_coeff_addr, dsp_coeff_we,
-         input dsp_data_out, dsp_data_in_ready, dsp_data_out_valid
-      );
-      modport TB (
-         input dsp_data_out, dsp_data_in_ready, dsp_data_out_valid,
-         output dsp_data_in, dsp_enable, dsp_reset, dsp_mode, dsp_data_in_valid,
-               dsp_data_out_ready, dsp_coeff_data, dsp_coeff_addr, dsp_coeff_we
-      );
-      modport MONITOR (
-         input dsp_data_in, dsp_enable, dsp_reset, dsp_mode, dsp_data_in_valid,
-               dsp_data_out_ready, dsp_coeff_data, dsp_coeff_addr, dsp_coeff_we,
-               dsp_data_out, dsp_data_in_ready, dsp_data_out_valid
-      );
+   modport DSP (
+      output dsp_data_in, dsp_enable, dsp_reset, dsp_mode, dsp_data_in_valid,
+            dsp_data_out_ready, dsp_coeff_data, dsp_coeff_addr, dsp_coeff_we,
+      input dsp_data_out, dsp_data_in_ready, dsp_data_out_valid
+   );
+   modport TB (clocking cb);
+   modport MONITOR (
+      input dsp_data_in, dsp_enable, dsp_reset, dsp_mode, dsp_data_in_valid,
+            dsp_data_out_ready, dsp_coeff_data, dsp_coeff_addr, dsp_coeff_we,
+            dsp_data_out, dsp_data_in_ready, dsp_data_out_valid
+   );
 endinterface
 
 /* Testbench to drive the AXI Lite and DSP interfaces: Programs are preferred for testbenches
@@ -139,15 +143,99 @@ endinterface
    before and driving after the clock edge. However, ModelSim’s free version does not support
    programs, so a module is used instead. To reduce potential race conditions, clocking 
    blocks are implemented within the interfaces.*/
-module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if, input logic clk, input logic rst_n);
-   // Testbench variables and tasks would be defined here
+module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
 
-    // Example: Task to perform a write transaction
+   // Testbench variables and tasks
+   const int ADDR_CTRL = 32'h00; // Address for control register
+   const int ADDR_STATUS = 32'h04; // Address for status register
+   const int ADDR_COEFF_DATA = 32'h08; // Address for coefficient data register
+   const int ADDR_COEFF_ADDR = 32'h0C; // Address for coefficient address register
+   const int ADDR_DATA_IN = 32'h10; // Address for data in register
+   const int ADDR_DATA_OUT = 32'h14; // Address for data out register
+   const int ADDR_OOB = 32'h40; // Address for out of range access
 
-/*    initial begin
-      rst_n = 0;
-      #20 rst_n = 1; // Release reset after 20 ns
-   end */
+   // Task to perform a write transaction
+   task write_transaction(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] strb);
+        @(axi_if.cb);
+        axi_if.cb.awaddr <= addr;
+        axi_if.cb.awvalid <= 1;
+        axi_if.cb.wdata <= data;
+        axi_if.cb.wvalid <= 1;
+        axi_if.cb.wstrb <= strb;
+        wait (axi_if.cb.awready && axi_if.cb.wready);
+        @(axi_if.cb);
+        axi_if.cb.awvalid <= 0;
+        axi_if.cb.wvalid <= 0;
+        wait (axi_if.cb.bvalid);
+        @(axi_if.cb);
+        axi_if.cb.bready <= 1;
+        @(axi_if.cb);
+        axi_if.cb.bready <= 0;
+    endtask
+    
+    // Task to perform a read transaction
+   task read_transaction(input logic [31:0] addr);
+         @(axi_if.cb);
+         axi_if.cb.araddr <= addr;
+         axi_if.cb.arvalid <= 1;
+         wait (axi_if.cb.arready);
+         @(axi_if.cb);
+         axi_if.cb.arvalid <= 0;
+         wait (axi_if.cb.rvalid);
+         @(axi_if.cb);
+         // Sample rdata and rresp here for checking
+         axi_if.cb.rready <= 1;
+         @(axi_if.cb);
+         axi_if.cb.rready <= 0;
+   endtask
+
+
+   initial begin
+      // Signal initialization
+      @(posedge axi_if.cb);
+         axi_if.cb.awaddr <= 0;
+         axi_if.cb.awvalid <= 0;
+         axi_if.cb.wdata <= 0;
+         axi_if.cb.wvalid <= 0;
+         axi_if.cb.wstrb <= 0;
+         axi_if.cb.bready <= 0;
+         axi_if.cb.araddr <= 0;
+         axi_if.cb.arvalid <= 0;
+         axi_if.cb.rready <= 0;
+   
+         dsp_if.cb.dsp_data_in_ready <= 0;
+         dsp_if.cb.dsp_data_out_valid <= 0;
+         dsp_if.cb.dsp_data_out <= 0;
+   
+      /*---------------------------------------------------------------
+        -- Test 1: Reset state
+        -- All AXI output signals must be at their safe defaults while
+        -- rst_n is held low.
+        ---------------------------------------------------------------*/
+      $display("Test 1: Verifying AXI output reset state");
+      @(posedge axi_if.cb);
+      t1_bvalid: assert (axi_if.cb.bvalid == 0) else $error("bvalid should be 0 after reset");
+      t1_arready: assert (axi_if.cb.arready == 0) else $error("arready should be 0 after reset");
+      t1_rvalid: assert (axi_if.cb.rvalid == 0) else $error("rvalid should be 0 after reset");
+      t1_dsp_enable: assert (dsp_if.cb.dsp_enable == 0) else $error("DSP enable should be 0 after reset");
+      t1_dsp_reset: assert (dsp_if.cb.dsp_reset == 0) else $error("DSP reset should be 0 after reset");
+      t1_dsp_data_in_valid: assert (dsp_if.cb.dsp_data_in_valid == 0) else $error("DSP data_in_valid should be 0 after reset");
+      t1_dsp_data_out_ready: assert (dsp_if.cb.dsp_data_out_ready == 0) else $error("DSP data_out_ready should be 0 after reset");
+      t1_dsp_coeff_we: assert (dsp_if.cb.dsp_coeff_we == 0) else $error("DSP coeff_we should be 0 after reset");
+      $display("Test 1 passed: AXI outputs and DSP control signals are in reset state");
+
+      /*-----------------------------------------------------------------------
+      -- Test 2: AXI write to CTRL and readback
+      -- Writing enable=1, reset=1, mode="10" via AXI must reach the DSP
+      -- outputs and be readable back at address 0x00.
+      -- CTRL encoding: bit0=enable, bit1=reset, bit3:2=mode â 0x0B
+      -----------------------------------------------------------------------*/
+      $display("Test 2: AXI write to CTRL and readback");
+
+
+
+       #100 $finish; // End simulation after some time
+   end 
 
    // Instantiate the AXI Lite Slave Interface
 
