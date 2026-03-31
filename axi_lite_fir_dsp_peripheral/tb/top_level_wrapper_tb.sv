@@ -251,7 +251,6 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
          else $error("DSP reset should be 1 after writing to CTRL");
       t2_dsp_mode: assert (dsp_if.cb.dsp_mode == 2) 
          else $error("DSP mode should be 2 after writing to CTRL");
-      $display("DSP interface reflects CTRL settings correctly");
 
       read_transaction(ADDR_CTRL); // Read back CTRL register
       // Sample rdata for checking
@@ -259,7 +258,6 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       t2_rdata: assert (axi_if.cb.rdata == 32'h0B) 
          else $error("Readback data mismatch: expected 0x0B, got %h", axi_if.cb.rdata);
 
-      $display("Readback from CTRL register is correct");
       $display("Test 2 passed: AXI write to CTRL and readback verified");
     
       /*-----------------------------------------------------------------------
@@ -322,6 +320,238 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
          else $error("AXI write to STATUS should return OKAY response, got %b", axi_if.cb.bresp);
 
       $display("Test 5 passed: STATUS register is read-only and write is ignored");
+    
+    
+      /*----------------------------------------------------------------------- 
+        -- Test 6: AXI write to COEFF_DATA propagates to dsp_coeff_data and
+        --     generates a one-cycle dsp_coeff_we pulse
+        -- DSP must be disabled (CTRL.ENABLE=0) for coeff_write_strobe to fire.
+      -----------------------------------------------------------------------*/
+/*       $display("Test 6: Verifying COEFF_DATA write propagates to DSP coefficient interface");
+
+      // Ensure DSP is disabled
+      write_transaction(ADDR_CTRL, 32'h00);
+
+      // Write coefficient data
+      write_transaction(ADDR_COEFF_DATA, 32'h00001234);
+
+      //@(dsp_if.cb);
+
+      t6_dsp_coeff_data: assert (dsp_if.cb.dsp_coeff_data[15:0] == 16'h1234) 
+         else $error("dsp_coeff_data[15:0] should be 0x1234, got %h", dsp_if.cb.dsp_coeff_data[15:0]);
+      t6_dsp_coeff_we: assert (dsp_if.cb.dsp_coeff_we == 1) 
+         else $error("dsp_coeff_we should be 1 during LOAD_COEFF state");
+
+      // One cycle later: dsp_coeff_we must deassert
+      @(dsp_if.cb);
+      t6_dsp_coeff_we_deassert: assert (dsp_if.cb.dsp_coeff_we == 0) 
+         else $error("dsp_coeff_we should be 0 after LOAD_COEFF completes");
+
+      $display("Test 6 passed: COEFF_DATA write propagates correctly"); */
+
+      /*----------------------------------------------------------------------- 
+        -- Test 7: AXI write to COEFF_ADDR propagates to dsp_coeff_addr and
+        --     also generates a one-cycle dsp_coeff_we pulse
+      -----------------------------------------------------------------------*/
+/*       $display("Test 7: Verifying COEFF_ADDR write propagates to dsp_coeff_addr");
+
+      write_transaction(ADDR_COEFF_ADDR, 32'h0F);
+
+      @(dsp_if.cb);
+      t7_dsp_coeff_addr: assert (dsp_if.cb.dsp_coeff_addr == 8'h0F) 
+         else $error("dsp_coeff_addr should be 0x0F");
+      t7_dsp_coeff_we: assert (dsp_if.cb.dsp_coeff_we == 1) 
+         else $error("dsp_coeff_we should be 1 during LOAD_COEFF state");
+
+      @(dsp_if.cb);
+      t7_dsp_coeff_we_deassert: assert (dsp_if.cb.dsp_coeff_we == 0) 
+         else $error("dsp_coeff_we should be 0 after one cycle");
+
+      $display("Test 7 passed: COEFF_ADDR write propagates correctly"); */
+
+      /*----------------------------------------------------------------------- 
+        -- Test 8: AXI write to DATA_IN triggers DSP SEND handshake
+        -- When CTRL.ENABLE=1 and DATA_IN is written, dsp_data_in_valid must
+        -- be asserted and the correct sample must appear on dsp_data_in.
+        -- FSM must hold dsp_data_in_valid until dsp_data_in_ready is seen.
+      -----------------------------------------------------------------------*/
+      $display("Test 8: Verifying DATA_IN write triggers DSP sample send");
+
+      // Enable DSP
+      write_transaction(ADDR_CTRL, 32'h01);
+
+      // Write a sample to DATA_IN
+      write_transaction(ADDR_DATA_IN, 32'h0000BEEF);
+
+      // After the write completes and the FSM has entered SEND, check outputs
+      @(dsp_if.cb);
+      t8_dsp_data_in_valid: assert (dsp_if.cb.dsp_data_in_valid == 1) 
+         else $error("dsp_data_in_valid should be 1 in SEND state");
+      t8_dsp_data_in: assert (dsp_if.cb.dsp_data_in[15:0] == 16'hBEEF) 
+         else $error("dsp_data_in[15:0] should be 0xBEEF");
+
+      // Simulate DSP accepting data after a couple of cycles
+      @(dsp_if.cb);
+      t8_dsp_data_in_valid_hold: assert (dsp_if.cb.dsp_data_in_valid == 1) 
+         else $error("dsp_data_in_valid must remain 1 while waiting for ready");
+
+      // DSP asserts ready
+      dsp_if.cb.dsp_data_in_ready <= 1;
+      @(dsp_if.cb);
+      dsp_if.cb.dsp_data_in_ready <= 0;
+
+      t8_dsp_data_in_valid_deassert: assert (dsp_if.cb.dsp_data_in_valid == 0) 
+         else $error("dsp_data_in_valid should be 0 after handshake");
+
+      $display("Test 8 passed: DATA_IN write triggers DSP SEND handshake");
+
+      /*----------------------------------------------------------------------- 
+        -- Test 9: DSP result captured in DATA_OUT register and readable via AXI
+        -- After the DSP asserts dsp_data_out_valid, the result must be stored
+        -- in DATA_OUT, dsp_data_out_ready must pulse for exactly one cycle,
+        -- and the value must be readable through AXI at address 0x14.
+      -----------------------------------------------------------------------*/
+      $display("Test 9: Verifying DSP result captured and readable via AXI");
+
+      // DSP is currently in WAIT_RESULT; deliver a result
+      dsp_if.cb.dsp_data_out <= 32'h00001234;
+      dsp_if.cb.dsp_data_out_valid <= 1;
+
+      @(dsp_if.cb);
+      dsp_if.cb.dsp_data_out_valid <= 0;
+
+
+      // dsp_data_out_ready must be pulsed for exactly one cycle
+      t9_dsp_data_out_ready: assert (dsp_if.cb.dsp_data_out_ready == 1) 
+         else $error("dsp_data_out_ready should be 1 on result capture cycle");
+
+      @(dsp_if.cb);
+      t9_dsp_data_out_ready_deassert: assert (dsp_if.cb.dsp_data_out_ready == 0) 
+         else $error("dsp_data_out_ready should be 0 one cycle after capture");
+
+
+
+      // Read DATA_OUT via AXI
+      read_transaction(ADDR_DATA_OUT);
+      @(axi_if.cb);
+      t9_rdata: assert (axi_if.cb.rdata[15:0] == 16'h1234) 
+         else $error("DATA_OUT readback should be 0x1234 via AXI");
+      t9_rresp: assert (axi_if.cb.rresp == 2'b00) 
+         else $error("RRESP should be OKAY for DATA_OUT read");
+
+      // Disable DSP before next tests
+      write_transaction(ADDR_CTRL, 32'h00);
+      @(dsp_if.cb); @(dsp_if.cb);
+
+      $display("Test 9 passed: DSP result captured and readable via AXI");
+
+      /*----------------------------------------------------------------------- 
+        -- Test 10: Full write-then-read round trip for COEFF_DATA
+        -- Verifies the complete AXI write --> register bank --> AXI read path
+        -- for a coefficient value, confirming data integrity end-to-end.
+      -----------------------------------------------------------------------*/
+      $display("Test 10: Verifying full write/read round trip for COEFF_DATA");
+
+      write_transaction(ADDR_COEFF_DATA, 32'h0000ABCD);
+      read_transaction(ADDR_COEFF_DATA);
+      @(axi_if.cb);
+      t10_rdata: assert (axi_if.cb.rdata[15:0] == 16'hABCD) 
+         else $error("COEFF_DATA readback should be 0xABCD");
+      t10_reserved: assert (axi_if.cb.rdata[31:16] == 16'h0000) 
+         else $error("COEFF_DATA reserved bits [31:16] must be zero");
+      t10_rresp: assert (axi_if.cb.rresp == 2'b00) 
+         else $error("RRESP should be OKAY for COEFF_DATA read");
+
+      $display("Test 10 passed: Full write/read round trip for COEFF_DATA verified");
+
+      /*----------------------------------------------------------------------- 
+        -- Test 11: AXI write response BRESP = OKAY for a valid address
+        -- A write to any valid, word-aligned address must complete with
+        -- BRESP = "00" (OKAY).
+      -----------------------------------------------------------------------*/
+      $display("Test 11: Verifying BRESP=OKAY for valid AXI write");
+
+      write_transaction(ADDR_CTRL, 32'h00);
+      @(axi_if.cb);
+      t11_bresp: assert (axi_if.cb.bresp == 2'b00) 
+         else $error("BRESP should be OKAY (00) for write to valid address");
+
+      $display("Test 11 passed: BRESP=OKAY for valid AXI write");
+
+      /*----------------------------------------------------------------------- 
+        -- Test 12: AXI write response BRESP = SLVERR for out-of-range address
+        -- A write to an address outside the register map must return
+        -- BRESP = "10" (SLVERR).
+      -----------------------------------------------------------------------*/
+      $display("Test 12: Verifying BRESP=SLVERR for out-of-range AXI write");
+
+      write_transaction(ADDR_OOB, 32'hDEADBEEF);
+      @(axi_if.cb);
+      t12_bresp: assert (axi_if.cb.bresp == 2'b10) 
+         else $error("BRESP should be SLVERR (10) for out-of-range write");
+
+      $display("Test 12 passed: BRESP=SLVERR for out-of-range AXI write");
+
+      /*----------------------------------------------------------------------- 
+        -- Test 13: AXI read response RRESP = SLVERR for out-of-range address
+        -- A read from an address outside the register map must return
+        -- RRESP = "10" (SLVERR) and RDATA = 0x00000000.
+      -----------------------------------------------------------------------*/
+      $display("Test 13: Verifying RRESP=SLVERR for out-of-range AXI read");
+
+      read_transaction(ADDR_OOB);
+      @(axi_if.cb);
+      t13_rresp: assert (axi_if.cb.rresp == 2'b10) 
+         else $error("RRESP should be SLVERR (10) for out-of-range read");
+      t13_rdata: assert (axi_if.cb.rdata == 32'h00000000) 
+         else $error("RDATA should be 0x00000000 for out-of-range read");
+
+      $display("Test 13 passed: RRESP=SLVERR for out-of-range AXI read");
+
+      /*----------------------------------------------------------------------- 
+        -- Test 14: STATUS.BUSY held across multiple cycles in WAIT_RESULT
+        -- After sending a sample (DATA_IN write with ENABLE=1) and completing
+        -- the dsp_data_in handshake, the FSM must remain in WAIT_RESULT with
+        -- STATUS.BUSY asserted for multiple cycles until dsp_data_out_valid.
+      -----------------------------------------------------------------------*/
+      $display("Test 14: Verifying STATUS.BUSY held in WAIT_RESULT until result arrives");
+
+      // Enable DSP and send a sample
+      write_transaction(ADDR_CTRL, 32'h01);
+      write_transaction(ADDR_DATA_IN, 32'h00005A5A);
+
+      // Complete the data-in handshake immediately
+      @(dsp_if.cb);
+      dsp_if.cb.dsp_data_in_ready <= 1;
+      @(dsp_if.cb);
+      dsp_if.cb.dsp_data_in_ready <= 0;
+
+      // FSM is now in WAIT_RESULT; read STATUS over 4 consecutive cycles
+      for (int cycle = 1; cycle <= 4; cycle++) begin
+         read_transaction(ADDR_STATUS);
+         @(axi_if.cb);
+         t14_busy: assert (axi_if.cb.rdata[2] == 1) 
+            else $error("STATUS.BUSY (bit2) should be 1 in WAIT_RESULT, cycle %0d", cycle);
+         t14_ready: assert (axi_if.cb.rdata[0] == 0) 
+            else $error("STATUS.READY (bit0) should be 0 while busy, cycle %0d", cycle);
+      end
+
+      // Deliver result to exit WAIT_RESULT
+      dsp_if.cb.dsp_data_out <= 32'h00005A5A;
+      dsp_if.cb.dsp_data_out_valid <= 1;
+      @(dsp_if.cb);
+      dsp_if.cb.dsp_data_out_valid <= 0;
+      @(dsp_if.cb); @(dsp_if.cb);
+
+      // STATUS should now show ready
+      read_transaction(ADDR_STATUS);
+      @(axi_if.cb);
+      t14_busy_clear: assert (axi_if.cb.rdata[2] == 0) 
+         else $error("STATUS.BUSY should be 0 after result captured");
+      t14_ready_set: assert (axi_if.cb.rdata[0] == 1) 
+         else $error("STATUS.READY should be 1 after result captured");
+
+      $display("Test 14 passed: STATUS.BUSY held in WAIT_RESULT until result arrives");
     
     
     #100 $stop; // Stop simulation after some time ("finish" would close ModelSim)
