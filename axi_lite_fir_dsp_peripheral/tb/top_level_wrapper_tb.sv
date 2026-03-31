@@ -58,7 +58,8 @@ module top_level_wrapper_tb;
       .dsp_coeff_we(dsp_if.dsp_coeff_we)
    );
 
-   //TODO: monitor
+   // Instantiate the monitor
+   monitor mon(axi_if.MONITOR, dsp_if.MONITOR, clk);
 
 
 endmodule
@@ -120,7 +121,8 @@ interface external_dsp_if(input logic clk, input logic rst_n);
 
    // Clocking block for the DSP interface
    clocking cb @(posedge clk);
-      default input #1step output;
+      default input #1step output; // Sample inputs 1 step before the clock edge, 
+                                   // drive outputs in the current clock edge
          output dsp_data_out, dsp_data_in_ready, dsp_data_out_valid;
          input dsp_data_in, dsp_enable, dsp_reset, dsp_mode, dsp_data_in_valid,
                dsp_data_out_ready, dsp_coeff_data, dsp_coeff_addr, dsp_coeff_we;
@@ -413,14 +415,18 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       -----------------------------------------------------------------------*/
       $display("Test 9: Verifying DSP result captured and readable via AXI");
 
+
       // DSP is currently in WAIT_RESULT; deliver a result
       dsp_if.cb.dsp_data_out <= 32'h00001234;
       dsp_if.cb.dsp_data_out_valid <= 1;
 
-      @(dsp_if.cb);
-      dsp_if.cb.dsp_data_out_valid <= 0;
-
-
+      repeat(2) @(dsp_if.cb); // Wait a couple of cycles to ensure stable sampling of dsp_data_out_valid:
+                              // As dsp_data_out_valid is asserted one clock cycle after dsp_data_out_valid
+                              // assertion, if we sample immediately on the next cycle, we might catch the
+                              // value before it is set to 1 because we are sampling in the prepone region 
+                              // (1 step before the clock edge). By waiting for 2 cycles, we ensure that 
+                              // we are sampling after the value has been set to 1.
+               
       // dsp_data_out_ready must be pulsed for exactly one cycle
       t9_dsp_data_out_ready: assert (dsp_if.cb.dsp_data_out_ready == 1) 
          else $error("dsp_data_out_ready should be 1 on result capture cycle");
@@ -429,6 +435,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       t9_dsp_data_out_ready_deassert: assert (dsp_if.cb.dsp_data_out_ready == 0) 
          else $error("dsp_data_out_ready should be 0 one cycle after capture");
 
+
+      dsp_if.cb.dsp_data_out_valid <= 0;
 
 
       // Read DATA_OUT via AXI
