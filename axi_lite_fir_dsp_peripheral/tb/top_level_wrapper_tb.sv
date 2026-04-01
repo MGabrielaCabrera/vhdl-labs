@@ -141,6 +141,44 @@ interface external_dsp_if(input logic clk, input logic rst_n);
    );
 endinterface
 
+module monitor(axi_lite_if.MONITOR axi_if, external_dsp_if.MONITOR dsp_if, input logic clk);
+
+   // Monitor AXI-lite handshakes and data transfers
+   always @(posedge clk) begin
+      if (axi_if.awvalid && axi_if.awready) begin
+         $display("  AXI Write Address: %h", axi_if.awaddr);
+      end
+      if (axi_if.wvalid && axi_if.wready) begin
+         $display("  AXI Write Data: %h, Strb: %b", axi_if.wdata, axi_if.wstrb);
+      end
+      if (axi_if.bvalid && axi_if.bready) begin
+         $display("  AXI Write Response: %b", axi_if.bresp);
+      end
+      if (axi_if.arvalid && axi_if.arready) begin
+         $display("  AXI Read Address: %h", axi_if.araddr);
+      end
+      if (axi_if.rvalid && axi_if.rready) begin
+         $display("  AXI Read Data: %h, Response: %b", axi_if.rdata, axi_if.rresp);
+      end
+   end
+   
+   // Monitor DSP interface signals
+   always @(posedge clk) begin
+      if (dsp_if.dsp_data_in_valid && dsp_if.dsp_data_in_ready) begin
+         $display("  DSP Data In: %h", dsp_if.dsp_data_in);
+      end
+      if (dsp_if.dsp_data_out_valid && dsp_if.dsp_data_out_ready) begin
+         $display("  DSP Data Out: %h", dsp_if.dsp_data_out);
+      end
+      if (dsp_if.dsp_enable) begin
+         $display("  DSP Enabled");
+      end else begin
+         $display("DSP Disabled");
+      end
+   end
+
+endmodule
+
 /* Testbench to drive the AXI Lite and DSP interfaces: Programs are preferred for testbenches
    because they run in the reactive region, naturally avoiding race conditions by sampling 
    before and driving after the clock edge. However, ModelSim’s free version does not support
