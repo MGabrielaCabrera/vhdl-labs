@@ -307,7 +307,7 @@ begin
         -- Test 2: AXI write to CTRL and readback
         -- Writing enable=1, reset=1, mode="10" via AXI must reach the DSP
         -- outputs and be readable back at address 0x00.
-        -- CTRL encoding: bit0=enable, bit1=reset, bit3:2=mode → 0x0B
+        -- CTRL encoding: bit0=enable, bit1=reset, bit3:2=mode --> 0x0B
         -----------------------------------------------------------------------
         report "Test 2: Verifying AXI write to CTRL and readback";
 
