@@ -12,7 +12,7 @@ vcom -2008 register_bank.vhd
 vcom -2008 top_level_wrapper.vhd
 
 echo "Compiling SystemVerilog testbench"
-vlog tb/top_level_wrapper_tb.sv
+vlog tb/sv/top_level_wrapper_tb.sv
 
 echo "Starting simulation"
 
