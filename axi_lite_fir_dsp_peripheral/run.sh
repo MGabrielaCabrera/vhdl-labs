@@ -5,13 +5,13 @@ mkdir -p build waves
 
 echo "Analyzing design files"
 ghdl -a --std=08 -fsynopsys --workdir=build axi_lite_slave_if.vhd
-ghdl -a --std=08 -fsynopsys --workdir=build tb/axi_lite_slave_if_tb.vhd
+ghdl -a --std=08 -fsynopsys --workdir=build tb/simple_vhdl/axi_lite_slave_if_tb.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build control_fsm.vhd
-ghdl -a --std=08 -fsynopsys --workdir=build tb/control_fsm_tb.vhd
+ghdl -a --std=08 -fsynopsys --workdir=build tb/simple_vhdl/control_fsm_tb.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build register_bank.vhd
-ghdl -a --std=08 -fsynopsys --workdir=build tb/register_bank_tb.vhd
+ghdl -a --std=08 -fsynopsys --workdir=build tb/simple_vhdl/register_bank_tb.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build top_level_wrapper.vhd
-ghdl -a --std=08 -fsynopsys --workdir=build tb/top_level_wrapper_tb.vhd
+ghdl -a --std=08 -fsynopsys --workdir=build tb/simple_vhdl/top_level_wrapper_tb.vhd
 
 
 echo "Elaborating axi_lite_slave_if testbench"
