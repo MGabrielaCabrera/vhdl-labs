@@ -2,6 +2,7 @@
 `include "interfaces/axi_lite_if.sv"
 `include "interfaces/external_dsp_if.sv"
 `include "classes/axi_driver.sv"
+`include "classes/scoreboard.sv"
 
 // Top testbench for AXI Lite Slave Interface
 `timescale 1ns/1ps
@@ -123,7 +124,10 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
    const int ADDR_DATA_OUT = 32'h14; // Address for data out register
    const int ADDR_OOB = 32'h40; // Address for out of range access
 
-   int unsigned fail_count_prev = 0;
+int unsigned fail_count_prev = 0;
+
+
+   Scoreboard  scb  = new();
 
    // Task to perform a write transaction
    task write_transaction(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] strb = 4'b1111);
@@ -185,30 +189,19 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- All AXI output signals must be at their safe defaults while
         -- rst_n is held low.
         ---------------------------------------------------------------*/
-      $display("[%0t ns] Test 1: Verifying AXI output reset state", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 1: Verifying AXI output reset state");
 
       @(posedge axi_if.cb);
-      `CHECK(t1_bvalid, axi_if.cb.bvalid == 0,
-               $sformatf("bvalid should be 0 after reset"));
-      `CHECK(t1_arready, axi_if.cb.arready == 0,
-               $sformatf("arready should be 0 after reset"));
-      `CHECK(t1_rvalid, axi_if.cb.rvalid == 0,
-               $sformatf("rvalid should be 0 after reset"));
-      `CHECK(t1_dsp_enable, dsp_if.cb.dsp_enable == 0,
-               $sformatf("DSP enable should be 0 after reset"));
-      `CHECK(t1_dsp_reset, dsp_if.cb.dsp_reset == 0,
-               $sformatf("DSP reset should be 0 after reset"));
-      `CHECK(t1_dsp_data_in_valid, dsp_if.cb.dsp_data_in_valid == 0,
-               $sformatf("DSP data_in_valid should be 0 after reset"));
-      `CHECK(t1_dsp_data_out_ready, dsp_if.cb.dsp_data_out_ready == 0,
-               $sformatf("DSP data_out_ready should be 0 after reset"));
-      `CHECK(t1_dsp_coeff_we, dsp_if.cb.dsp_coeff_we == 0,
-               $sformatf("DSP coeff_we should be 0 after reset"));
+      scb.check("t1_bvalid", axi_if.cb.bvalid == 0, "bvalid should be 0 after reset");
+      scb.check("t1_arready", axi_if.cb.arready == 0, "arready should be 0 after reset");
+      scb.check("t1_rvalid", axi_if.cb.rvalid == 0, "rvalid should be 0 after reset");
+      scb.check("t1_dsp_enable", dsp_if.cb.dsp_enable == 0, "DSP enable should be 0 after reset");
+      scb.check("t1_dsp_reset", dsp_if.cb.dsp_reset == 0, "DSP reset should be 0 after reset");
+      scb.check("t1_dsp_data_in_valid", dsp_if.cb.dsp_data_in_valid == 0, "DSP data_in_valid should be 0 after reset");
+      scb.check("t1_dsp_data_out_ready", dsp_if.cb.dsp_data_out_ready == 0, "DSP data_out_ready should be 0 after reset");
+      scb.check("t1_dsp_coeff_we", dsp_if.cb.dsp_coeff_we == 0, "DSP coeff_we should be 0 after reset");
 
-      $display("[%0t ns] Test 1 %s", $realtime, 
-         (fail_count - fail_count_prev) == 0 ? "PASSED: AXI outputs and DSP control signals are in reset state" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 1");
 
       /*-----------------------------------------------------------------------
         -- Test 2: AXI write to CTRL and readback
@@ -216,108 +209,93 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- outputs and be readable back at address 0x00.
         -- CTRL encoding: bit0=enable, bit1=reset, bit3:2=mode --> 0x0B
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 2: AXI write to CTRL and readback", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 2: AXI write to CTRL and readback");
 
       write_transaction(ADDR_CTRL, 32'h0B); // Write to CTRL register
       // Wait for the DSP interface to reflect the changes
       @(posedge dsp_if.cb);
-      `CHECK(t2_dsp_enable, dsp_if.cb.dsp_enable == 1,
-               $sformatf("DSP enable should be 1 after writing to CTRL"));
-      `CHECK(t2_dsp_reset, dsp_if.cb.dsp_reset == 1,
-               $sformatf("DSP reset should be 1 after writing to CTRL"));
-      `CHECK(t2_dsp_mode, dsp_if.cb.dsp_mode == 2,
+      scb.check("t2_dsp_enable", dsp_if.cb.dsp_enable == 1, "DSP enable should be 1 after writing to CTRL");
+      scb.check("t2_dsp_reset", dsp_if.cb.dsp_reset == 1, "DSP reset should be 1 after writing to CTRL");
+      scb.check("t2_dsp_mode", dsp_if.cb.dsp_mode == 2, "DSP mode should be 2 after writing to CTRL");
                $sformatf("DSP mode should be 2 after writing to CTRL"));
 
       read_transaction(ADDR_CTRL); // Read back CTRL register
       // Sample rdata for checking
       @(axi_if.cb);
-      `CHECK(t2_rdata, axi_if.cb.rdata == 32'h0B,
+      scb.check("t2_rdata", axi_if.cb.rdata == 32'h0B,
                $sformatf("Readback data mismatch: expected 0x0B, got %h", axi_if.cb.rdata));
 
-      $display("[%0t ns] Test 2 %s", $realtime, 
-         (fail_count - fail_count_prev) == 0 ? "PASSED: AXI write to CTRL and readback verified" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 2");
  
       /*-----------------------------------------------------------------------
         -- Test 3: CTRL reserved bits are forced to zero
         -- Writing 0xFFFFFFFF to CTRL must only store bits [3:0]; all upper
         -- bits must read back as zero through the full AXI path.
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 3: CTRL reserved bits are forced to zero", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 3: CTRL reserved bits are forced to zero");
 
       write_transaction(ADDR_CTRL, 32'hFFFFFFFF); // Write to CTRL register
       read_transaction(ADDR_CTRL); // Read back CTRL register
 
       // Sample rdata for checking
       @(axi_if.cb);
-      `CHECK(t3_rdata_reserved_bits, axi_if.cb.rdata[31:4] == 28'h00,
+      scb.check("t3_rdata_reserved_bits", axi_if.cb.rdata[31:4] == 28'h00,
                $sformatf("CTRL reserved bits [31:4] must read as zero, got %h", axi_if.cb.rdata[31:4]));
-      `CHECK(t3_rdata, axi_if.cb.rdata[3:0] == 4'hF,
+      scb.check("t3_rdata", axi_if.cb.rdata[3:0] == 4'hF,
                $sformatf("CTRL writable bits [3:0] should all be '1', got %h", axi_if.cb.rdata[3:0]));
 
       // Restore
       write_transaction(ADDR_CTRL, 32'h00); // Write to CTRL register
 
-      $display("[%0t ns] Test 3 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: CTRL reserved bits are forced to zero verified" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 3");
 
       /*-----------------------------------------------------------------------
         -- Test 4: AXI write to CTRL enables DSP (dsp_enable propagation)
         -- Verifies that writing bit 0 of CTRL makes dsp_enable go high, and
         -- clearing it makes it go low again.
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 4: Verifying CTRL enable bit propagates to dsp_enable", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 4: CTRL enable bit propagates to dsp_enable");
 
       write_transaction(ADDR_CTRL, 32'h01); // Set enable bit
       @(posedge dsp_if.cb);
-      `CHECK(t4_dsp_enable_set, dsp_if.cb.dsp_enable == 1,
+      scb.check("t4_dsp_enable_set", dsp_if.cb.dsp_enable == 1,
                $sformatf("DSP enable should be 1 after setting enable bit in CTRL"));
-      `CHECK(t4_dsp_reset_unchanged, dsp_if.cb.dsp_reset == 0,
+      scb.check("t4_dsp_reset_unchanged", dsp_if.cb.dsp_reset == 0,
                $sformatf("DSP reset should remain 0 after setting enable bit in CTRL"));
-      `CHECK(t4_dsp_mode_unchanged, dsp_if.cb.dsp_mode == 0,
+      scb.check("t4_dsp_mode_unchanged", dsp_if.cb.dsp_mode == 0,
                $sformatf("DSP mode should remain 0 after setting enable bit in CTRL"));
       
       write_transaction(ADDR_CTRL, 32'h00); // Clear enable bit
       @(posedge dsp_if.cb);
-      `CHECK(t4_dsp_enable_clear, dsp_if.cb.dsp_enable == 0,
+      scb.check("t4_dsp_enable_clear", dsp_if.cb.dsp_enable == 0,
                $sformatf("DSP enable should be 0 after clearing enable bit in CTRL"));
 
-      $display("[%0t ns] Test 4 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: CTRL enable bit correctly propagates to dsp_enable" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 4");
       /*-----------------------------------------------------------------------
         -- T5: AXI write to STATUS is silently ignored (RO register)
         -- STATUS must not change as a result of a software AXI write.
         -- The response must still be OKAY (write accepted by AXI slave).
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 5: Verifying STATUS is read-only (AXI write ignored)", $realtime);
-   
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 5: Verifying STATUS is read-only (AXI write ignored)");
 
       write_transaction(ADDR_STATUS, 32'hFFFFFFFF); // Attempt to write to STATUS register
       // Check that STATUS did not change
       read_transaction(ADDR_STATUS); // Read back STATUS register
       @(axi_if.cb);
-      `CHECK(t5_status_unchanged, axi_if.cb.rdata[31:3] == 29'h00,
+      scb.check("t5_status_unchanged", axi_if.cb.rdata[31:3] == 29'h00,
                $sformatf("STATUS register should remain unchanged at 0x00000000, got %h", axi_if.cb.rdata[31:3]));
-      `CHECK(t5_s_axi_bresp_okay, axi_if.cb.bresp == 2'b00,
+      scb.check("t5_s_axi_bresp_okay", axi_if.cb.bresp == 2'b00,
                $sformatf("AXI write to STATUS should return OKAY response, got %b", axi_if.cb.bresp));
 
-      $display("[%0t ns] Test 5 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: STATUS register is read-only and write is ignored" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 5");
 
       /*----------------------------------------------------------------------- 
         -- Test 6: AXI write to COEFF_DATA propagates to dsp_coeff_data and
         --     generates a one-cycle dsp_coeff_we pulse
         -- DSP must be disabled (CTRL.ENABLE=0) for coeff_write_strobe to fire.
       -----------------------------------------------------------------------*/
-/*       $display("[%0t ns] Test 6: Verifying COEFF_DATA write propagates to DSP coefficient interface", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+/*    
+      scb.init_test("Test 6: COEFF_DATA write propagates to dsp_coeff_data and generates dsp_coeff_we pulse");
 
       // Ensure DSP is disabled
       write_transaction(ADDR_CTRL, 32'h00);
@@ -326,42 +304,38 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       write_transaction(ADDR_COEFF_DATA, 32'h00001234);
 
       //@(dsp_if.cb);
-
-      `CHECK(t6_dsp_coeff_data, dsp_if.cb.dsp_coeff_data[15:0] == 16'h1234,
+      scb.check("t6_dsp_coeff_data", dsp_if.cb.dsp_coeff_data[15:0] == 16'h1234,
                $sformatf("dsp_coeff_data[15:0] should be 0x1234, got %h", dsp_if.cb.dsp_coeff_data[15:0]));
-      `CHECK(t6_dsp_coeff_we, dsp_if.cb.dsp_coeff_we == 1,
+      scb.check("t6_dsp_coeff_we", dsp_if.cb.dsp_coeff_we == 1,
                $sformatf("dsp_coeff_we should be 1 during LOAD_COEFF state"));
 
       // One cycle later: dsp_coeff_we must deassert
       @(dsp_if.cb);
-      `CHECK(t6_dsp_coeff_we_deassert, dsp_if.cb.dsp_coeff_we == 0,
+      scb.check("t6_dsp_coeff_we_deassert", dsp_if.cb.dsp_coeff_we == 0,
                $sformatf("dsp_coeff_we should be 0 after LOAD_COEFF completes"));
 
-      $display("[%0t ns] Test 6 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: COEFF_DATA write propagates correctly" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 6");
 
       /*----------------------------------------------------------------------- 
         -- Test 7: AXI write to COEFF_ADDR propagates to dsp_coeff_addr and
         --     also generates a one-cycle dsp_coeff_we pulse
       -----------------------------------------------------------------------*/
-/*       $display("[%0t ns] Test 7: Verifying COEFF_ADDR write propagates to dsp_coeff_addr", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+/*   
+      scb.init_test("Test 7: COEFF_ADDR write propagates to dsp_coeff_addr and generates dsp_coeff_we pulse");
 
       write_transaction(ADDR_COEFF_ADDR, 32'h0F);
 
       @(dsp_if.cb);
-      `CHECK(t7_dsp_coeff_addr, dsp_if.cb.dsp_coeff_addr == 8'h0F,
+      scb.check("t7_dsp_coeff_addr", dsp_if.cb.dsp_coeff_addr == 8'h0F,
                $sformatf("dsp_coeff_addr should be 0x0F, got %h", dsp_if.cb.dsp_coeff_addr));
-      `CHECK(t7_dsp_coeff_we, dsp_if.cb.dsp_coeff_we == 1,
+      scb.check("t7_dsp_coeff_we", dsp_if.cb.dsp_coeff_we == 1,
                $sformatf("dsp_coeff_we should be 1 during LOAD_COEFF state", dsp_if.cb.dsp_coeff_we));
 
       @(dsp_if.cb);
-      `CHECK(t7_dsp_coeff_we_deassert, dsp_if.cb.dsp_coeff_we == 0,
+      scb.check("t7_dsp_coeff_we_deassert", dsp_if.cb.dsp_coeff_we == 0,
                $sformatf("dsp_coeff_we should be 0 after one cycle"));
 
-      $display("[%0t ns] Test 7 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: COEFF_ADDR write propagates correctly" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 7");
 
       /*----------------------------------------------------------------------- 
         -- Test 8: AXI write to DATA_IN triggers DSP SEND handshake
@@ -369,9 +343,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- be asserted and the correct sample must appear on dsp_data_in.
         -- FSM must hold dsp_data_in_valid until dsp_data_in_ready is seen.
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 8: Verifying DATA_IN write triggers DSP sample send", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 8: DATA_IN write triggers DSP SEND handshake");
 
       // Enable DSP
       write_transaction(ADDR_CTRL, 32'h01);
@@ -381,14 +353,14 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
 
       // After the write completes and the FSM has entered SEND, check outputs
       @(dsp_if.cb);
-      `CHECK(t8_dsp_data_in_valid, dsp_if.cb.dsp_data_in_valid == 1,
+      scb.check("t8_dsp_data_in_valid", dsp_if.cb.dsp_data_in_valid == 1,
                $sformatf("dsp_data_in_valid should be 1 in SEND state"));
-      `CHECK(t8_dsp_data_in, dsp_if.cb.dsp_data_in[15:0] == 16'hBEEF,
+      scb.check("t8_dsp_data_in", dsp_if.cb.dsp_data_in[15:0] == 16'hBEEF,
                $sformatf("dsp_data_in[15:0] should be 0xBEEF"));
 
       // Simulate DSP accepting data after a couple of cycles
       @(dsp_if.cb);
-      `CHECK(t8_dsp_data_in_valid_hold, dsp_if.cb.dsp_data_in_valid == 1,
+      scb.check("t8_dsp_data_in_valid_hold", dsp_if.cb.dsp_data_in_valid == 1,
                $sformatf("dsp_data_in_valid must remain 1 while waiting for ready"));
 
       // DSP asserts ready
@@ -396,11 +368,10 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       @(dsp_if.cb);
       dsp_if.cb.dsp_data_in_ready <= 0;
 
-      `CHECK(t8_dsp_data_in_valid_deassert, dsp_if.cb.dsp_data_in_valid == 0,
+      scb.check("t8_dsp_data_in_valid_deassert", dsp_if.cb.dsp_data_in_valid == 0,
                $sformatf("dsp_data_in_valid should be 0 after handshake"));
 
-      $display("[%0t ns] Test 8 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: DATA_IN write triggers DSP SEND handshake" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 8");
 
       /*----------------------------------------------------------------------- 
         -- Test 9: DSP result captured in DATA_OUT register and readable via AXI
@@ -408,9 +379,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- in DATA_OUT, dsp_data_out_ready must pulse for exactly one cycle,
         -- and the value must be readable through AXI at address 0x14.
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 9: Verifying DSP result captured and readable via AXI", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 9: DSP result captured in DATA_OUT register and readable via AXI");
 
       // DSP is currently in WAIT_RESULT; deliver a result
       dsp_if.cb.dsp_data_out <= 32'h00001234;
@@ -424,11 +393,13 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
                               // we are sampling after the value has been set to 1.
                
       // dsp_data_out_ready must be pulsed for exactly one cycle
-      `CHECK(t9_dsp_data_out_ready, dsp_if.cb.dsp_data_out_ready == 1,
+      scb.check("t9_dsp_data_out_valid", dsp_if.cb.dsp_data_out_valid == 1,
+               $sformatf("dsp_data_out_valid should be 1 when DSP result is ready"));
+      scb.check("t9_dsp_data_out_ready", dsp_if.cb.dsp_data_out_ready == 1,
                $sformatf("dsp_data_out_ready should be 1 on result capture cycle"));
 
       @(dsp_if.cb);
-      `CHECK(t9_dsp_data_out_ready_deassert, dsp_if.cb.dsp_data_out_ready == 0,
+      scb.check("t9_dsp_data_out_ready_deassert", dsp_if.cb.dsp_data_out_ready == 0,
                $sformatf("dsp_data_out_ready should be 0 one cycle after capture"));
 
 
@@ -438,92 +409,81 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       // Read DATA_OUT via AXI
       read_transaction(ADDR_DATA_OUT);
       @(axi_if.cb);
-      `CHECK(t9_rdata, axi_if.cb.rdata[15:0] == 16'h1234,
+      scb.check("t9_rdata", axi_if.cb.rdata[15:0] == 16'h1234,
                $sformatf("DATA_OUT readback should be 0x1234 via AXI"));
-      `CHECK(t9_rresp, axi_if.cb.rresp == 2'b00,
+      scb.check("t9_rresp", axi_if.cb.rresp == 2'b00,
                $sformatf("RRESP should be OKAY for DATA_OUT read"));
 
       // Disable DSP before next tests
       write_transaction(ADDR_CTRL, 32'h00);
       @(dsp_if.cb); @(dsp_if.cb);
 
-      $display("[%0t ns] Test 9 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: DSP result captured and readable via AXI" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 9");
 
       /*----------------------------------------------------------------------- 
         -- Test 10: Full write-then-read round trip for COEFF_DATA
         -- Verifies the complete AXI write --> register bank --> AXI read path
         -- for a coefficient value, confirming data integrity end-to-end.
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 10: Verifying full write/read round trip for COEFF_DATA", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 10: Full write/read round trip for COEFF_DATA");
 
       write_transaction(ADDR_COEFF_DATA, 32'h0000ABCD);
       read_transaction(ADDR_COEFF_DATA);
       @(axi_if.cb);
-      `CHECK(t10_rdata, axi_if.cb.rdata[15:0] == 16'hABCD,
+      scb.check("t10_rdata", axi_if.cb.rdata[15:0] == 16'hABCD,
                $sformatf("COEFF_DATA readback should be 0xABCD"));
-      `CHECK(t10_reserved, axi_if.cb.rdata[31:16] == 16'h0000,
+      scb.check("t10_rdata", axi_if.cb.rdata[15:0] == 16'hABCD,
+               $sformatf("COEFF_DATA readback should be 0xABCD"));
+      scb.check("t10_reserved", axi_if.cb.rdata[31:16] == 16'h0000,
                $sformatf("COEFF_DATA reserved bits [31:16] must be zero"));
-      `CHECK(t10_rresp, axi_if.cb.rresp == 2'b00,
+      scb.check("t10_rresp", axi_if.cb.rresp == 2'b00,
                $sformatf("RRESP should be OKAY for COEFF_DATA read"));
 
-      $display("[%0t ns] Test 10 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: Full write/read round trip for COEFF_DATA verified" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 10");
 
       /*----------------------------------------------------------------------- 
         -- Test 11: AXI write response BRESP = OKAY for a valid address
         -- A write to any valid, word-aligned address must complete with
         -- BRESP = "00" (OKAY).
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 11: Verifying BRESP=OKAY for valid AXI write", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 11: Verifying BRESP=OKAY for valid AXI write");
 
       write_transaction(ADDR_CTRL, 32'h00);
       @(axi_if.cb);
-      `CHECK(t11_bresp, axi_if.cb.bresp == 2'b00,
+      scb.check("t11_bresp", axi_if.cb.bresp == 2'b00,
                $sformatf("BRESP should be OKAY (00) for write to valid address"));
 
-      $display("[%0t ns] Test 11 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: BRESP=OKAY for valid AXI write" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 11");
 
       /*----------------------------------------------------------------------- 
         -- Test 12: AXI write response BRESP = SLVERR for out-of-range address
         -- A write to an address outside the register map must return
         -- BRESP = "10" (SLVERR).
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 12: Verifying BRESP=SLVERR for out-of-range AXI write", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 12: Verifying BRESP=SLVERR for out-of-range AXI write");
 
       write_transaction(ADDR_OOB, 32'hDEADBEEF);
       @(axi_if.cb);
-      `CHECK(t12_bresp, axi_if.cb.bresp == 2'b10,
+      scb.check("t12_bresp", axi_if.cb.bresp == 2'b10,
                $sformatf("BRESP should be SLVERR (10) for out-of-range write"));
 
-      $display("[%0t ns] Test 12 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: BRESP=SLVERR for out-of-range AXI write" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 12");
 
       /*----------------------------------------------------------------------- 
         -- Test 13: AXI read response RRESP = SLVERR for out-of-range address
         -- A read from an address outside the register map must return
         -- RRESP = "10" (SLVERR) and RDATA = 0x00000000.
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 13: Verifying RRESP=SLVERR for out-of-range AXI read", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 13: Verifying RRESP=SLVERR for out-of-range AXI read");
 
       read_transaction(ADDR_OOB);
       @(axi_if.cb);
-      `CHECK(t13_rresp, axi_if.cb.rresp == 2'b10,
+      scb.check("t13_rresp", axi_if.cb.rresp == 2'b10,
                $sformatf("RRESP should be SLVERR (10) for out-of-range read"));
-      `CHECK(t13_rdata, axi_if.cb.rdata == 32'h00000000,
+      scb.check("t13_rdata", axi_if.cb.rdata == 32'h00000000,
                $sformatf("RDATA should be 0x00000000 for out-of-range read"));
 
-      $display("[%0t ns] Test 13 passed %s", $realtime,
-         (fail_count - fail_count_prev) == 0 ? "PASSED: RRESP=SLVERR for out-of-range AXI read" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
+      scb.test_report("Test 13");
 
       /*----------------------------------------------------------------------- 
         -- Test 14: STATUS.BUSY held across multiple cycles in WAIT_RESULT
@@ -531,9 +491,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- the dsp_data_in handshake, the FSM must remain in WAIT_RESULT with
         -- STATUS.BUSY asserted for multiple cycles until dsp_data_out_valid.
       -----------------------------------------------------------------------*/
-      $display("[%0t ns] Test 14: Verifying STATUS.BUSY held in WAIT_RESULT until result arrives", $realtime);
-
-      fail_count_prev = fail_count; // Capture fail count before the test
+      scb.init_test("Test 14: STATUS.BUSY held in WAIT_RESULT until result arrives");
 
       // Enable DSP and send a sample
       write_transaction(ADDR_CTRL, 32'h01);
@@ -549,9 +507,9 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       for (int cycle = 1; cycle <= 4; cycle++) begin
          read_transaction(ADDR_STATUS);
          @(axi_if.cb);
-         `CHECK(t14_busy, axi_if.cb.rdata[2] == 1,
+         scb.check("t14_busy", axi_if.cb.rdata[2] == 1,
                   $sformatf("STATUS.BUSY (bit2) should be 1 in WAIT_RESULT, cycle %0d", cycle));
-         `CHECK(t14_ready, axi_if.cb.rdata[0] == 0,
+         scb.check("t14_ready", axi_if.cb.rdata[0] == 0,
                   $sformatf("STATUS.READY (bit0) should be 0 while busy, cycle %0d", cycle));
       end
 
@@ -565,23 +523,17 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       // STATUS should now show ready
       read_transaction(ADDR_STATUS);
       @(axi_if.cb);
-      `CHECK(t14_busy_clear, axi_if.cb.rdata[2] == 0,
+      scb.check("t14_busy_clear", axi_if.cb.rdata[2] == 0,
                $sformatf("STATUS.BUSY should be 0 after result captured"));
-      `CHECK(t14_ready_set, axi_if.cb.rdata[0] == 1,
+      scb.check("t14_ready_set", axi_if.cb.rdata[0] == 1,
                $sformatf("STATUS.READY should be 1 after result captured"));
 
-      $display("[%0t ns] Test 14 passed %s", $realtime,
+      scb.test_report("Test 14");
          (fail_count - fail_count_prev) == 0 ? "PASSED: STATUS.BUSY held in WAIT_RESULT until result arrives" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
 
-
-      $display("[%0t ns] End of tests %s", $realtime, 
-         fail_count == 0 ? "PASSED: All tests passed" : $sformatf("FAILED (%0d errors)", fail_count));
+      scb.general_report();
 
    #100 $stop; // Stop simulation after some time ("finish" would close ModelSim)
    end 
-
-   // Instantiate the AXI Lite Slave Interface
-
-   // Testbench logic to drive the interface and check responses would go here
 
 endmodule
