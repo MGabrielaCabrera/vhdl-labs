@@ -34,6 +34,7 @@ NOTE: The current structure aims to approximate a UVM design.
 Modifications are still needed, as assertions shouldn't be displayed
 on the scoreboard or monitor. The goal is to achieve something like this:
 
+```
 uvm_sequence       uvm_driver
  (test mod) -->  (AXI_Driver)  -->  DUT
                                      |
@@ -41,3 +42,4 @@ uvm_sequence       uvm_driver
                        |
                        V mailbox/TLM
                   uvm_scoreboard
+```
