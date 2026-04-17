@@ -145,7 +145,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         ---------------------------------------------------------------*/
       scb.init_test("Test 1: Verifying AXI output reset state");
 
-      @(posedge axi_if.cb);
+      axi_drv.wait_cycles(1); 
       scb.check("t1_bvalid", axi_if.cb.bvalid == 0, "bvalid should be 0 after reset");
       scb.check("t1_arready", axi_if.cb.arready == 0, "arready should be 0 after reset");
       scb.check("t1_rvalid", axi_if.cb.rvalid == 0, "rvalid should be 0 after reset");
@@ -169,7 +169,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_drv.write(axi_tran);
 
       // Wait for the DSP interface to reflect the changes
-      @(posedge dsp_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t2_dsp_enable", dsp_if.cb.dsp_enable == 1, "DSP enable should be 1 after writing to CTRL");
       scb.check("t2_dsp_reset", dsp_if.cb.dsp_reset == 1, "DSP reset should be 1 after writing to CTRL");
       scb.check("t2_dsp_mode", dsp_if.cb.dsp_mode == 2, "DSP mode should be 2 after writing to CTRL");
@@ -177,7 +177,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.READ, ADDR_CTRL); // Read back CTRL register
       axi_drv.read(axi_tran);
       // Sample rdata for checking
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t2_rdata", axi_if.cb.rdata == 32'h0B,
                $sformatf("Readback data mismatch: expected 0x0B, got %h", axi_if.cb.rdata));
 
@@ -196,7 +196,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_drv.read(axi_tran);
 
       // Sample rdata for checking
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t3_rdata_reserved_bits", axi_if.cb.rdata[31:4] == 28'h00,
                $sformatf("CTRL reserved bits [31:4] must read as zero, got %h", axi_if.cb.rdata[31:4]));
       scb.check("t3_rdata", axi_if.cb.rdata[3:0] == 4'hF,
@@ -247,7 +247,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.READ, ADDR_STATUS); // Read back STATUS register
       axi_drv.read(axi_tran);
 
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t5_status_unchanged", axi_if.cb.rdata[31:3] == 29'h00,
                $sformatf("STATUS register should remain unchanged at 0x00000000, got %h", axi_if.cb.rdata[31:3]));
       scb.check("t5_s_axi_bresp_okay", axi_if.cb.bresp == 2'b00,
@@ -381,7 +381,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.READ, ADDR_DATA_OUT);
       axi_drv.read(axi_tran);
       
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t9_rdata", axi_if.cb.rdata[15:0] == 16'h1234,
                $sformatf("DATA_OUT readback should be 0x1234 via AXI"));
       scb.check("t9_rresp", axi_if.cb.rresp == 2'b00,
@@ -406,7 +406,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.READ, ADDR_COEFF_DATA);
       axi_drv.read(axi_tran);
 
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t10_rdata", axi_if.cb.rdata[15:0] == 16'hABCD,
                $sformatf("COEFF_DATA readback should be 0xABCD"));
       scb.check("t10_rdata", axi_if.cb.rdata[15:0] == 16'hABCD,
@@ -428,7 +428,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
       axi_drv.write(axi_tran);
 
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t11_bresp", axi_if.cb.bresp == 2'b00,
                $sformatf("BRESP should be OKAY (00) for write to valid address"));
 
@@ -444,7 +444,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.WRITE, ADDR_OOB, 32'hDEADBEEF);
       axi_drv.write(axi_tran);
 
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t12_bresp", axi_if.cb.bresp == 2'b10,
                $sformatf("BRESP should be SLVERR (10) for out-of-range write"));
 
@@ -460,7 +460,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.READ, ADDR_OOB);
       axi_drv.read(axi_tran);
 
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t13_rresp", axi_if.cb.rresp == 2'b10,
                $sformatf("RRESP should be SLVERR (10) for out-of-range read"));
       scb.check("t13_rdata", axi_if.cb.rdata == 32'h00000000,
@@ -493,7 +493,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
          axi_tran = new(axi_tran.READ, ADDR_STATUS);
          axi_drv.read(axi_tran);
       
-         @(axi_if.cb);
+         axi_drv.wait_cycles(1);
          scb.check("t14_busy", axi_if.cb.rdata[2] == 1,
                   $sformatf("STATUS.BUSY (bit2) should be 1 in WAIT_RESULT, cycle %0d", cycle));
          scb.check("t14_ready", axi_if.cb.rdata[0] == 0,
@@ -511,7 +511,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.READ, ADDR_STATUS);
       axi_drv.read(axi_tran);
    
-      @(axi_if.cb);
+      axi_drv.wait_cycles(1);
       scb.check("t14_busy_clear", axi_if.cb.rdata[2] == 0,
                $sformatf("STATUS.BUSY should be 0 after result captured"));
       scb.check("t14_ready_set", axi_if.cb.rdata[0] == 1,

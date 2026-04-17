@@ -61,4 +61,12 @@ class AXI_Driver;
     @(vif.cb);
     vif.cb.rready <= 0;
   endtask
+  
+  // Task to wait for a specified number of clock cycles, useful for timing control in test sequences.
+  // Like this, this class is the only one that has access to the axi_lite_if.TB  interface,
+  // so it can provide utility functions that other classes can call without needing direct access
+  // to the interface signals.
+  task wait_cycles(int n);
+    repeat(n) @(vif.cb);
+  endtask
 endclass
