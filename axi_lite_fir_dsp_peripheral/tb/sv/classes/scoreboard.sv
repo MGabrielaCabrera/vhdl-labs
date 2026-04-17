@@ -11,13 +11,13 @@ class Scoreboard;
     end
   endtask
 
-  function init_test(string test_name);
+  function void init_test(string test_name);
     $display("[%0t ns] %s", $realtime, test_name);
 
     fail_count_prev = fail_count; // Save current fail count to track new failures
   endfunction
 
-  function test_report(string test_name);
+  function void test_report(string test_name);
     if (fail_count - fail_count_prev == 0)
       $display("%s PASSED", test_name);
     else

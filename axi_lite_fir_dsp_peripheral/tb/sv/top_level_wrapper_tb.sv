@@ -124,65 +124,19 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
    const int ADDR_DATA_OUT = 32'h14; // Address for data out register
    const int ADDR_OOB = 32'h40; // Address for out of range access
 
-int unsigned fail_count_prev = 0;
-
-
+   AXI_Driver axi_drv = new(axi_if);
+   AXI_Transaction axi_tran;
    Scoreboard  scb  = new();
-
-   // Task to perform a write transaction
-   task write_transaction(input logic [31:0] addr, input logic [31:0] data, input logic [3:0] strb = 4'b1111);
-        @(axi_if.cb);
-        axi_if.cb.awaddr <= addr;
-        axi_if.cb.awvalid <= 1;
-        axi_if.cb.wdata <= data;
-        axi_if.cb.wvalid <= 1;
-        axi_if.cb.wstrb <= strb;
-        wait (axi_if.cb.awready && axi_if.cb.wready);
-        @(axi_if.cb);
-        axi_if.cb.awvalid <= 0;
-        axi_if.cb.wvalid <= 0;
-        wait (axi_if.cb.bvalid);
-        @(axi_if.cb);
-        axi_if.cb.bready <= 1;
-        @(axi_if.cb);
-        axi_if.cb.bready <= 0;
-    endtask
-    
-    // Task to perform a read transaction
-   task read_transaction(input logic [31:0] addr);
-         @(axi_if.cb);
-         axi_if.cb.araddr <= addr;
-         axi_if.cb.arvalid <= 1;
-         wait (axi_if.cb.arready);
-         @(axi_if.cb);
-         axi_if.cb.arvalid <= 0;
-         wait (axi_if.cb.rvalid);
-         @(axi_if.cb);
-         // Sample rdata and rresp here for checking
-         axi_if.cb.rready <= 1;
-         @(axi_if.cb);
-         axi_if.cb.rready <= 0;
-   endtask
-
 
    initial begin
       $timeformat(-9, 0, " ns", 8);
 
       // Signal initialization
-      @(posedge axi_if.cb);
-         axi_if.cb.awaddr <= 0;
-         axi_if.cb.awvalid <= 0;
-         axi_if.cb.wdata <= 0;
-         axi_if.cb.wvalid <= 0;
-         axi_if.cb.wstrb <= 0;
-         axi_if.cb.bready <= 0;
-         axi_if.cb.araddr <= 0;
-         axi_if.cb.arvalid <= 0;
-         axi_if.cb.rready <= 0;
-   
-         dsp_if.cb.dsp_data_in_ready <= 0;
-         dsp_if.cb.dsp_data_out_valid <= 0;
-         dsp_if.cb.dsp_data_out <= 0;
+      axi_drv.init();
+
+      dsp_if.cb.dsp_data_in_ready <= 0;
+      dsp_if.cb.dsp_data_out_valid <= 0;
+      dsp_if.cb.dsp_data_out <= 0;
    
       /*---------------------------------------------------------------
         -- Test 1: Reset state
@@ -211,15 +165,17 @@ int unsigned fail_count_prev = 0;
       -----------------------------------------------------------------------*/
       scb.init_test("Test 2: AXI write to CTRL and readback");
 
-      write_transaction(ADDR_CTRL, 32'h0B); // Write to CTRL register
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h0B); // Write to CTRL register
+      axi_drv.write(axi_tran);
+
       // Wait for the DSP interface to reflect the changes
       @(posedge dsp_if.cb);
       scb.check("t2_dsp_enable", dsp_if.cb.dsp_enable == 1, "DSP enable should be 1 after writing to CTRL");
       scb.check("t2_dsp_reset", dsp_if.cb.dsp_reset == 1, "DSP reset should be 1 after writing to CTRL");
       scb.check("t2_dsp_mode", dsp_if.cb.dsp_mode == 2, "DSP mode should be 2 after writing to CTRL");
-               $sformatf("DSP mode should be 2 after writing to CTRL"));
 
-      read_transaction(ADDR_CTRL); // Read back CTRL register
+      axi_tran = new(axi_tran.READ, ADDR_CTRL); // Read back CTRL register
+      axi_drv.read(axi_tran);
       // Sample rdata for checking
       @(axi_if.cb);
       scb.check("t2_rdata", axi_if.cb.rdata == 32'h0B,
@@ -233,9 +189,11 @@ int unsigned fail_count_prev = 0;
         -- bits must read back as zero through the full AXI path.
       -----------------------------------------------------------------------*/
       scb.init_test("Test 3: CTRL reserved bits are forced to zero");
-
-      write_transaction(ADDR_CTRL, 32'hFFFFFFFF); // Write to CTRL register
-      read_transaction(ADDR_CTRL); // Read back CTRL register
+      
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'hFFFFFFFF); // Write to CTRL register
+      axi_drv.write(axi_tran);
+      axi_tran = new(axi_tran.READ, ADDR_CTRL); // Read back CTRL register
+      axi_drv.read(axi_tran);
 
       // Sample rdata for checking
       @(axi_if.cb);
@@ -245,7 +203,8 @@ int unsigned fail_count_prev = 0;
                $sformatf("CTRL writable bits [3:0] should all be '1', got %h", axi_if.cb.rdata[3:0]));
 
       // Restore
-      write_transaction(ADDR_CTRL, 32'h00); // Write to CTRL register
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00); // Write to CTRL register
+      axi_drv.write(axi_tran);
 
       scb.test_report("Test 3");
 
@@ -255,8 +214,10 @@ int unsigned fail_count_prev = 0;
         -- clearing it makes it go low again.
       -----------------------------------------------------------------------*/
       scb.init_test("Test 4: CTRL enable bit propagates to dsp_enable");
+      
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h01); // Set enable bit
+      axi_drv.write(axi_tran);
 
-      write_transaction(ADDR_CTRL, 32'h01); // Set enable bit
       @(posedge dsp_if.cb);
       scb.check("t4_dsp_enable_set", dsp_if.cb.dsp_enable == 1,
                $sformatf("DSP enable should be 1 after setting enable bit in CTRL"));
@@ -265,7 +226,8 @@ int unsigned fail_count_prev = 0;
       scb.check("t4_dsp_mode_unchanged", dsp_if.cb.dsp_mode == 0,
                $sformatf("DSP mode should remain 0 after setting enable bit in CTRL"));
       
-      write_transaction(ADDR_CTRL, 32'h00); // Clear enable bit
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00); // Clear enable bit
+      axi_drv.write(axi_tran);
       @(posedge dsp_if.cb);
       scb.check("t4_dsp_enable_clear", dsp_if.cb.dsp_enable == 0,
                $sformatf("DSP enable should be 0 after clearing enable bit in CTRL"));
@@ -278,9 +240,13 @@ int unsigned fail_count_prev = 0;
       -----------------------------------------------------------------------*/
       scb.init_test("Test 5: Verifying STATUS is read-only (AXI write ignored)");
 
-      write_transaction(ADDR_STATUS, 32'hFFFFFFFF); // Attempt to write to STATUS register
+      axi_tran = new(axi_tran.WRITE, ADDR_STATUS, 32'hFFFFFFFF); // Attempt to write to STATUS register
+      axi_drv.write(axi_tran);
+
       // Check that STATUS did not change
-      read_transaction(ADDR_STATUS); // Read back STATUS register
+      axi_tran = new(axi_tran.READ, ADDR_STATUS); // Read back STATUS register
+      axi_drv.read(axi_tran);
+
       @(axi_if.cb);
       scb.check("t5_status_unchanged", axi_if.cb.rdata[31:3] == 29'h00,
                $sformatf("STATUS register should remain unchanged at 0x00000000, got %h", axi_if.cb.rdata[31:3]));
@@ -298,10 +264,12 @@ int unsigned fail_count_prev = 0;
       scb.init_test("Test 6: COEFF_DATA write propagates to dsp_coeff_data and generates dsp_coeff_we pulse");
 
       // Ensure DSP is disabled
-      write_transaction(ADDR_CTRL, 32'h00);
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
+      axi_drv.write(axi_tran);
 
       // Write coefficient data
-      write_transaction(ADDR_COEFF_DATA, 32'h00001234);
+      axi_tran = new(axi_tran.WRITE, ADDR_COEFF_DATA, 32'h00001234);
+      axi_drv.write(axi_tran);
 
       //@(dsp_if.cb);
       scb.check("t6_dsp_coeff_data", dsp_if.cb.dsp_coeff_data[15:0] == 16'h1234,
@@ -323,7 +291,8 @@ int unsigned fail_count_prev = 0;
 /*   
       scb.init_test("Test 7: COEFF_ADDR write propagates to dsp_coeff_addr and generates dsp_coeff_we pulse");
 
-      write_transaction(ADDR_COEFF_ADDR, 32'h0F);
+      axi_tran = new(axi_tran.WRITE, ADDR_COEFF_ADDR, 32'h0F);
+      axi_drv.write(axi_tran);
 
       @(dsp_if.cb);
       scb.check("t7_dsp_coeff_addr", dsp_if.cb.dsp_coeff_addr == 8'h0F,
@@ -346,10 +315,12 @@ int unsigned fail_count_prev = 0;
       scb.init_test("Test 8: DATA_IN write triggers DSP SEND handshake");
 
       // Enable DSP
-      write_transaction(ADDR_CTRL, 32'h01);
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h01);
+      axi_drv.write(axi_tran);
 
       // Write a sample to DATA_IN
-      write_transaction(ADDR_DATA_IN, 32'h0000BEEF);
+      axi_tran = new(axi_tran.WRITE, ADDR_DATA_IN, 32'h0000BEEF);
+      axi_drv.write(axi_tran);
 
       // After the write completes and the FSM has entered SEND, check outputs
       @(dsp_if.cb);
@@ -407,7 +378,9 @@ int unsigned fail_count_prev = 0;
 
 
       // Read DATA_OUT via AXI
-      read_transaction(ADDR_DATA_OUT);
+      axi_tran = new(axi_tran.READ, ADDR_DATA_OUT);
+      axi_drv.read(axi_tran);
+      
       @(axi_if.cb);
       scb.check("t9_rdata", axi_if.cb.rdata[15:0] == 16'h1234,
                $sformatf("DATA_OUT readback should be 0x1234 via AXI"));
@@ -415,7 +388,8 @@ int unsigned fail_count_prev = 0;
                $sformatf("RRESP should be OKAY for DATA_OUT read"));
 
       // Disable DSP before next tests
-      write_transaction(ADDR_CTRL, 32'h00);
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
+      axi_drv.write(axi_tran);
       @(dsp_if.cb); @(dsp_if.cb);
 
       scb.test_report("Test 9");
@@ -427,8 +401,11 @@ int unsigned fail_count_prev = 0;
       -----------------------------------------------------------------------*/
       scb.init_test("Test 10: Full write/read round trip for COEFF_DATA");
 
-      write_transaction(ADDR_COEFF_DATA, 32'h0000ABCD);
-      read_transaction(ADDR_COEFF_DATA);
+      axi_tran = new(axi_tran.WRITE, ADDR_COEFF_DATA, 32'h0000ABCD);
+      axi_drv.write(axi_tran);
+      axi_tran = new(axi_tran.READ, ADDR_COEFF_DATA);
+      axi_drv.read(axi_tran);
+
       @(axi_if.cb);
       scb.check("t10_rdata", axi_if.cb.rdata[15:0] == 16'hABCD,
                $sformatf("COEFF_DATA readback should be 0xABCD"));
@@ -448,7 +425,9 @@ int unsigned fail_count_prev = 0;
       -----------------------------------------------------------------------*/
       scb.init_test("Test 11: Verifying BRESP=OKAY for valid AXI write");
 
-      write_transaction(ADDR_CTRL, 32'h00);
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
+      axi_drv.write(axi_tran);
+
       @(axi_if.cb);
       scb.check("t11_bresp", axi_if.cb.bresp == 2'b00,
                $sformatf("BRESP should be OKAY (00) for write to valid address"));
@@ -462,7 +441,9 @@ int unsigned fail_count_prev = 0;
       -----------------------------------------------------------------------*/
       scb.init_test("Test 12: Verifying BRESP=SLVERR for out-of-range AXI write");
 
-      write_transaction(ADDR_OOB, 32'hDEADBEEF);
+      axi_tran = new(axi_tran.WRITE, ADDR_OOB, 32'hDEADBEEF);
+      axi_drv.write(axi_tran);
+
       @(axi_if.cb);
       scb.check("t12_bresp", axi_if.cb.bresp == 2'b10,
                $sformatf("BRESP should be SLVERR (10) for out-of-range write"));
@@ -476,7 +457,9 @@ int unsigned fail_count_prev = 0;
       -----------------------------------------------------------------------*/
       scb.init_test("Test 13: Verifying RRESP=SLVERR for out-of-range AXI read");
 
-      read_transaction(ADDR_OOB);
+      axi_tran = new(axi_tran.READ, ADDR_OOB);
+      axi_drv.read(axi_tran);
+
       @(axi_if.cb);
       scb.check("t13_rresp", axi_if.cb.rresp == 2'b10,
                $sformatf("RRESP should be SLVERR (10) for out-of-range read"));
@@ -494,8 +477,10 @@ int unsigned fail_count_prev = 0;
       scb.init_test("Test 14: STATUS.BUSY held in WAIT_RESULT until result arrives");
 
       // Enable DSP and send a sample
-      write_transaction(ADDR_CTRL, 32'h01);
-      write_transaction(ADDR_DATA_IN, 32'h00005A5A);
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h01);
+      axi_drv.write(axi_tran);
+      axi_tran = new(axi_tran.WRITE, ADDR_DATA_IN, 32'h00005A5A);
+      axi_drv.write(axi_tran);
 
       // Complete the data-in handshake immediately
       @(dsp_if.cb);
@@ -505,7 +490,9 @@ int unsigned fail_count_prev = 0;
 
       // FSM is now in WAIT_RESULT; read STATUS over 4 consecutive cycles
       for (int cycle = 1; cycle <= 4; cycle++) begin
-         read_transaction(ADDR_STATUS);
+         axi_tran = new(axi_tran.READ, ADDR_STATUS);
+         axi_drv.read(axi_tran);
+      
          @(axi_if.cb);
          scb.check("t14_busy", axi_if.cb.rdata[2] == 1,
                   $sformatf("STATUS.BUSY (bit2) should be 1 in WAIT_RESULT, cycle %0d", cycle));
@@ -521,15 +508,14 @@ int unsigned fail_count_prev = 0;
       @(dsp_if.cb); @(dsp_if.cb);
 
       // STATUS should now show ready
-      read_transaction(ADDR_STATUS);
+      axi_tran = new(axi_tran.READ, ADDR_STATUS);
+      axi_drv.read(axi_tran);
+   
       @(axi_if.cb);
       scb.check("t14_busy_clear", axi_if.cb.rdata[2] == 0,
                $sformatf("STATUS.BUSY should be 0 after result captured"));
       scb.check("t14_ready_set", axi_if.cb.rdata[0] == 1,
                $sformatf("STATUS.READY should be 1 after result captured"));
-
-      scb.test_report("Test 14");
-         (fail_count - fail_count_prev) == 0 ? "PASSED: STATUS.BUSY held in WAIT_RESULT until result arrives" : $sformatf("FAILED (%0d errors)", fail_count - fail_count_prev));
 
       scb.general_report();
 

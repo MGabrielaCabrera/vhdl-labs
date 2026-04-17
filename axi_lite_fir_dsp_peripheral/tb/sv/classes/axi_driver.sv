@@ -14,6 +14,19 @@ class AXI_Driver;
     vif = i;
   endfunction
 
+  task init();
+    @(vif.cb);
+    vif.cb.awvalid <= 0;
+    vif.cb.wvalid  <= 0;
+    vif.cb.bready  <= 0;
+    vif.cb.arvalid <= 0;
+    vif.cb.rready  <= 0;
+    vif.cb.awaddr  <= 0;
+    vif.cb.wdata  <= 0;
+    vif.cb.araddr  <= 0;
+    vif.cb.wstrb   <= 0;
+  endtask
+
   task write(input AXI_Transaction t);
     @(vif.cb);
     vif.cb.awaddr  <= t.addr;
