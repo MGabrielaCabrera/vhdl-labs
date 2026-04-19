@@ -14,6 +14,12 @@ class AXI_Driver;
     vif = i;
   endfunction
 
+  // Sampling functions to allow other classes to check the state of AXI signals 
+  // without needing direct access to the interface.
+  function logic sample_bvalid();  return vif.cb.bvalid;  endfunction
+  function logic sample_arready(); return vif.cb.arready; endfunction
+  function logic sample_rvalid();  return vif.cb.rvalid;  endfunction
+
   task init();
     @(vif.cb);
     vif.cb.awvalid <= 0;
@@ -27,6 +33,8 @@ class AXI_Driver;
     vif.cb.wstrb   <= 0;
   endtask
 
+  // Note: classes are always passed by reference, so the transaction object 't' 
+  // is modified in place to capture the read data and response.
   task write(input AXI_Transaction t);
     @(vif.cb);
     vif.cb.awaddr  <= t.addr;
@@ -45,7 +53,9 @@ class AXI_Driver;
     @(vif.cb);
     vif.cb.bready <= 0;
   endtask
-
+  
+  // Note: classes are always passed by reference, so the transaction object 't' 
+  // is modified in place to capture the read data and response.
   task read(input AXI_Transaction t);
     @(vif.cb);
     vif.cb.araddr  <= t.addr;
