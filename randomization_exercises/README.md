@@ -129,7 +129,7 @@ automatically restricted as a consequence.
 
 **File:** `ex07_solve_before.sv`
 
-Create a class with a 1-bit flag and a 4-bit value. Add a constraint
+Create a class with a 1-bit flag and a 3-bit value. Add a constraint
 so that when the flag is set, the value must be zero.
 
 Without any ordering hint, randomize 1000 times and count how often
@@ -287,13 +287,6 @@ Create a class with several random fields. Then:
 
 ---
 
-## General Tips
+## Simulation results:
 
-- Always check the return value of `randomize()`:
-```systemverilog
-  if (!obj.randomize()) $fatal("Randomization failed!");
-```
-- Intentionally write an unsolvable constraint to observe what
-  a failure looks like.
-- When debugging, comment out constraint blocks one at a time
-  to isolate the conflict.
+https://github.com/MGabrielaCabrera/vhdl-labs/issues/20
