@@ -289,4 +289,10 @@ Create a class with several random fields. Then:
 
 ## Simulation results:
 
+Due to the randomization limitations in the free version of ModelSim,
+the EDA Playground web has been used to simulated the exercises. The
+simulator used was Aldec Riviera.
+
+The simulation results are in the issue:
+
 https://github.com/MGabrielaCabrera/vhdl-labs/issues/20
