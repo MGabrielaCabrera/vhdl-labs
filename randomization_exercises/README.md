@@ -266,27 +266,6 @@ Generate 10 sequences and print each step in order.
 
 ---
 
-## Exercise 14 — Seeds and Random Stability
-
-**File:** `ex14_seeds_stability.sv`
-
-Create a class with several random fields. Then:
-
-1. Run the simulation twice with different seed values and confirm
-   you get different stimulus each time.
-2. In a single simulation, create two instances of the class and
-   verify they produce independent sequences from each other.
-3. Add a second randomizable class. Verify that adding or removing
-   randomization calls in one class does not affect the sequence
-   produced by the other.
-
-**Goals:**
-- Control the random stream through simulator seeds
-- Observe that each object has its own independent random state
-- Appreciate per-object stability across unrelated changes
-
----
-
 ## Simulation results:
 
 Due to the randomization limitations in the free version of ModelSim,

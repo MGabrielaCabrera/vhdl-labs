@@ -43,3 +43,16 @@ This project will also serve as the starting point for reviewing **SystemVerilog
 **Concepts:** AXI-Lite protocol, memory-mapped register banks, control FSM design, processor–
 peripheral bridging, modular RTL architecture. *(Upcoming: SV verification environment,
 constrained-random stimulus, assertions.)*
+
+---
+
+### `randomization_exercises`
+After reading Chapter 6 of "SYSTEMVERILOG FOR VERIFICATION" book of Chris Spear, 13 exercises proposed by Claude have been execute to review the learned concepts about randomization using SystemVerilog.
+
+**Concepts:** `rand` vs `randc` variable types, `randomize()` return value checking,
+equality and set membership constraints (`==`, `inside`), weighted distributions (`dist` with `:=` and `:/`),
+implication (`->`) and `if-else` conditional constraints, bidirectional constraint solving,
+solver ordering with `solve...before`, runtime constraint control (`constraint_mode()`, `rand_mode()`),
+inline constraints with `randomize() with {}`, `pre_randomize()` and `post_randomize()` hooks,
+array constraints (`size()`, `sum()`, `foreach`), overflow handling in `sum()`,
+procedural weighted selection with `randcase`, grammar-based stimulus with `randsequence`.
