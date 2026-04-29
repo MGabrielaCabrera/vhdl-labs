@@ -144,6 +144,10 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
    AXI_Transaction axi_tran;
    Scoreboard  scb  = new();
 
+   // Variables to capture DSP outputs for checking using fork/join_any (test 6)
+   logic we_captured;
+   logic [15:0] coeff_data_captured;
+
    initial begin
       $timeformat(-9, 0, " ns", 8);
 
@@ -276,22 +280,37 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         --     generates a one-cycle dsp_coeff_we pulse
         -- DSP must be disabled (CTRL.ENABLE=0) for coeff_write_strobe to fire.
       -----------------------------------------------------------------------*/
-/*    
+    
       scb.init_test("Test 6: COEFF_DATA write propagates to dsp_coeff_data and generates dsp_coeff_we pulse");
+
+      // Initialize capture variables
+      we_captured = 0;
+      coeff_data_captured = 16'h0000;
 
       // Ensure DSP is disabled
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
       axi_drv.write(axi_tran);
 
-      // Write coefficient data
-      axi_tran = new(axi_tran.WRITE, ADDR_COEFF_DATA, 32'h00001234);
-      axi_drv.write(axi_tran);
+      fork
+         begin
+            // Wait for dsp_coeff_we to go high
+            wait (dsp_if.cb.dsp_coeff_we == 1);
+            we_captured = 1;
+            coeff_data_captured = dsp_if.cb.dsp_coeff_data[15:0];
+         end
+         begin
+             // Write coefficient data
+             axi_tran = new(axi_tran.WRITE, ADDR_COEFF_DATA, 32'h00001234);
+             axi_drv.write(axi_tran);
+         end
+      join_any
 
-      //@(dsp_if.cb);
-      scb.check("t6_dsp_coeff_data", dsp_if.cb.dsp_coeff_data[15:0] == 16'h1234,
-               $sformatf("dsp_coeff_data[15:0] should be 0x1234, got %h", dsp_if.cb.dsp_coeff_data[15:0]));
-      scb.check("t6_dsp_coeff_we", dsp_if.cb.dsp_coeff_we == 1,
+      // It is expected that first thread finishes before the second one, because the axi-lite 
+      // handshake takes longer to complete 
+      scb.check("t6_dsp_coeff_we", we_captured == 1,
                $sformatf("dsp_coeff_we should be 1 during LOAD_COEFF state"));
+      scb.check("t6_dsp_coeff_data", coeff_data_captured == 16'h1234,
+               $sformatf("dsp_coeff_data[15:0] should be 0x1234, got %h", dsp_if.cb.dsp_coeff_data[15:0]));
 
       // One cycle later: dsp_coeff_we must deassert
       @(dsp_if.cb);
@@ -299,7 +318,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
                $sformatf("dsp_coeff_we should be 0 after LOAD_COEFF completes"));
 
       scb.test_report("Test 6");
-
+    
       /*----------------------------------------------------------------------- 
         -- Test 7: AXI write to COEFF_ADDR propagates to dsp_coeff_addr and
         --     also generates a one-cycle dsp_coeff_we pulse
