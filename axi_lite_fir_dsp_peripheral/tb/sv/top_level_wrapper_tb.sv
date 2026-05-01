@@ -147,6 +147,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
    // Variables to capture DSP outputs for checking using fork/join_any (test 6)
    logic we_captured;
    logic [15:0] coeff_data_captured;
+   logic [7:0] coeff_addr_captured;
 
    initial begin
       $timeformat(-9, 0, " ns", 8);
@@ -154,9 +155,9 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       // Signal initialization
       axi_drv.init();
 
-      dsp_if.cb.dsp_data_in_ready <= 0;
-      dsp_if.cb.dsp_data_out_valid <= 0;
-      dsp_if.cb.dsp_data_out <= 0;
+      dsp_if.cb.dsp_data_in_ready <= 1'b0;
+      dsp_if.cb.dsp_data_out_valid <= 1'b0;
+      dsp_if.cb.dsp_data_out <= 32'h00000000;
    
       /*---------------------------------------------------------------
         -- Test 1: Reset state
@@ -323,16 +324,37 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- Test 7: AXI write to COEFF_ADDR propagates to dsp_coeff_addr and
         --     also generates a one-cycle dsp_coeff_we pulse
       -----------------------------------------------------------------------*/
-/*   
+   
       scb.init_test("Test 7: COEFF_ADDR write propagates to dsp_coeff_addr and generates dsp_coeff_we pulse");
+      
+      // Initialize capture variables
+      we_captured = 0;
+      coeff_data_captured = 16'h0000;
+      coeff_addr_captured = 8'h00;
 
-      axi_tran = new(axi_tran.WRITE, ADDR_COEFF_ADDR, 32'h0F);
+      // Ensure DSP is disabled
+      axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
       axi_drv.write(axi_tran);
 
-      @(dsp_if.cb);
-      scb.check("t7_dsp_coeff_addr", dsp_if.cb.dsp_coeff_addr == 8'h0F,
+      fork
+         begin
+            // Wait for dsp_coeff_we to go high
+            wait (dsp_if.cb.dsp_coeff_we == 1);
+            we_captured = 1;
+            coeff_addr_captured = dsp_if.cb.dsp_coeff_addr;
+         end
+         begin
+             // Write coefficient address
+             axi_tran = new(axi_tran.WRITE, ADDR_COEFF_ADDR, 32'h0F);
+             axi_drv.write(axi_tran);
+         end
+      join_any
+
+      // It is expected that first thread finishes before the second one, because the axi-lite 
+      // handshake takes longer to complete 
+      scb.check("t7_dsp_coeff_addr", coeff_addr_captured == 8'h0F,
                $sformatf("dsp_coeff_addr should be 0x0F, got %h", dsp_if.cb.dsp_coeff_addr));
-      scb.check("t7_dsp_coeff_we", dsp_if.cb.dsp_coeff_we == 1,
+      scb.check("t7_dsp_coeff_we", we_captured == 1,
                $sformatf("dsp_coeff_we should be 1 during LOAD_COEFF state", dsp_if.cb.dsp_coeff_we));
 
       @(dsp_if.cb);
