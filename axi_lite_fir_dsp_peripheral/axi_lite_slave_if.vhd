@@ -161,12 +161,16 @@ begin
                 --------------------------------------------------------
                 -- handshake state: both address and data valid at the same time, capture both immediately
                 when HANDSHAKE =>
-                    reg_awaddr_int  <= s_axi_awaddr;
-                    reg_wdata_int   <= axi_wdata_strb;
                     write_error_lat <= not addr_valid(s_axi_awaddr);
                     s_axi_awready   <= '1';
                     s_axi_wready    <= '1';
                     write_state     <= EXEC;
+                    -- If address is valid, assert write enable for one cycle to perform the write
+                    if not addr_valid(s_axi_awaddr) = '0' then
+                        reg_write_en <= '1';           -- single-cycle write pulse
+                        reg_waddr    <= s_axi_awaddr;
+                        reg_wdata    <= axi_wdata_strb;
+                    end if;
                 ---------------------------------------------------------
                 -- Address handshake state, waiting for data
                 when AW_HANDSHAKE =>
@@ -184,28 +188,35 @@ begin
                 -- Address received first, waiting for data
                 when AW_WAIT =>
                     if s_axi_wvalid = '1' then
-                        reg_wdata_int <= axi_wdata_strb;
                         s_axi_wready <= '1';
                         write_state   <= EXEC;
+                        -- If address is valid, assert write enable for one cycle to perform the write
+                        if write_error_lat = '0' then
+                            reg_write_en <= '1';           -- single-cycle write pulse
+                            reg_waddr    <= reg_awaddr_int;
+                            reg_wdata    <= axi_wdata_strb;
+                        end if;
                     end if;
                 -- -------------------------------------------------------
                 -- Data received first, waiting for address
                 when W_WAIT =>
                     if s_axi_awvalid = '1' then
-                        reg_awaddr_int  <= s_axi_awaddr;
                         write_error_lat <= not addr_valid(s_axi_awaddr);
                         s_axi_awready   <= '1';
                         write_state     <= EXEC;
+                        -- If address is valid, assert write enable for one cycle to perform the write
+                        if not addr_valid(s_axi_awaddr) = '0' then
+                            reg_write_en <= '1';           -- single-cycle write pulse
+                            reg_waddr    <= s_axi_awaddr;
+                            reg_wdata    <= reg_wdata_int;
+                        end if;
                     end if;
                 -- -------------------------------------------------------
-                -- Perform the write and assert BVALID
+                -- Assert BVALID
                 when EXEC =>
                     s_axi_awready <= '0';
                     s_axi_wready  <= '0';
                     if write_error_lat = '0' then
-                        reg_write_en <= '1';           -- single-cycle write pulse
-                        reg_waddr    <= reg_awaddr_int;
-                        reg_wdata    <= reg_wdata_int;
                         s_axi_bresp  <= "00";          -- OKAY
                     else
                         s_axi_bresp  <= "10";          -- SLVERR
@@ -255,18 +266,17 @@ begin
                     end if;
                     -- -------------------------------------------------------
                     when HANDSHAKE =>
-                    reg_araddr_int <= s_axi_araddr;
                     read_error_lat <= not addr_valid(s_axi_araddr);
                     s_axi_arready  <= '1';
                     read_state     <= EXEC;
+                    if not addr_valid(s_axi_araddr) = '0' then
+                        reg_read_en  <= '1';
+                        reg_raddr    <= s_axi_araddr;
+                    end if;
                 -- -------------------------------------------------------
-                -- Assert read enable for one cycle so the register
-                -- can provide data; capture result on the next cycle
                 when EXEC =>
                     s_axi_arready  <= '0';
                     if read_error_lat = '0' then
-                        reg_read_en  <= '1';
-                        reg_raddr    <= reg_araddr_int;
                         s_axi_rresp  <= "00";           -- OKAY
                     else
                         s_axi_rresp  <= "10";           -- SLVERR
