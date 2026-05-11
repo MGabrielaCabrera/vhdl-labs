@@ -42,16 +42,25 @@ class AXI_Driver;
     vif.cb.wdata   <= t.data;
     vif.cb.wvalid  <= 1;
     vif.cb.wstrb   <= t.strb;
-    wait(vif.cb.awready && vif.cb.wready);
-    @(vif.cb);
-    vif.cb.awvalid <= 0;
-    vif.cb.wvalid  <= 0;
-    wait(vif.cb.bvalid);
-    @(vif.cb);
-    vif.cb.bready <= 1;
-    t.resp = vif.cb.bresp;   // captura respuesta
-    @(vif.cb);
-    vif.cb.bready <= 0;
+
+    fork
+      begin
+        wait(vif.cb.awready && vif.cb.wready);
+        @(vif.cb);
+        vif.cb.awvalid <= 0;
+        vif.cb.wvalid  <= 0;
+      end
+
+      begin
+        wait(vif.cb.bvalid==1);
+        @(vif.cb);
+        vif.cb.bready <= 1;
+        t.resp = vif.cb.bresp;   // captura respuesta
+        @(vif.cb);
+        vif.cb.bready <= 0;
+      end
+    join_any
+
   endtask
   
   // Note: classes are always passed by reference, so the transaction object 't' 
