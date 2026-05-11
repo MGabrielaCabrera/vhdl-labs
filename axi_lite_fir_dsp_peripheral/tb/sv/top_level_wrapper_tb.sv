@@ -189,6 +189,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h0B); // Write to CTRL register
       axi_drv.write(axi_tran);
 
+
       scb.check("t2_dsp_enable", dsp_if.cb.dsp_enable == 1, "DSP enable should be 1 after writing to CTRL");
       scb.check("t2_dsp_reset", dsp_if.cb.dsp_reset == 1, "DSP reset should be 1 after writing to CTRL");
       scb.check("t2_dsp_mode", dsp_if.cb.dsp_mode == 2, "DSP mode should be 2 after writing to CTRL");
@@ -209,6 +210,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       -----------------------------------------------------------------------*/
       scb.init_test("Test 3: CTRL reserved bits are forced to zero");
       
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
+
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'hFFFFFFFF); // Write to CTRL register
       axi_drv.write(axi_tran);
       axi_tran = new(axi_tran.READ, ADDR_CTRL); // Read back CTRL register
@@ -219,8 +222,9 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
                $sformatf("CTRL reserved bits [31:4] must read as zero, got %h", axi_tran.rdata_out[31:4]));
       scb.check("t3_rdata", axi_tran.rdata_out[3:0] == 4'hF,
                $sformatf("CTRL writable bits [3:0] should all be '1', got %h", axi_tran.rdata_out[3:0]));
-
+      
       // Restore
+      axi_drv.wait_cycles(2);
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00); // Write to CTRL register
       axi_drv.write(axi_tran);
 
@@ -233,6 +237,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       -----------------------------------------------------------------------*/
       scb.init_test("Test 4: CTRL enable bit propagates to dsp_enable");
       
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h01); // Set enable bit
       axi_drv.write(axi_tran);
 
@@ -243,6 +248,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       scb.check("t4_dsp_mode_unchanged", dsp_if.cb.dsp_mode == 0,
                $sformatf("DSP mode should remain 0 after setting enable bit in CTRL"));
       
+      axi_drv.wait_cycles(2); // Wait a couple of cycles to ensure stable sampling 
+                              // of dsp_enable before clearing the bit
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00); // Clear enable bit
       axi_drv.write(axi_tran);
       @(posedge dsp_if.cb);
@@ -256,6 +263,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- The response must still be OKAY (write accepted by AXI slave).
       -----------------------------------------------------------------------*/
       scb.init_test("Test 5: Verifying STATUS is read-only (AXI write ignored)");
+
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
 
       axi_tran = new(axi_tran.WRITE, ADDR_STATUS, 32'hFFFFFFFF); // Attempt to write to STATUS register
       axi_drv.write(axi_tran);
@@ -278,6 +287,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       -----------------------------------------------------------------------*/
     
       scb.init_test("Test 6: COEFF_DATA write propagates to dsp_coeff_data and generates dsp_coeff_we pulse");
+
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
 
       // Initialize capture variables
       we_captured = 0;
@@ -322,6 +333,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
    
       scb.init_test("Test 7: COEFF_ADDR write propagates to dsp_coeff_addr and generates dsp_coeff_we pulse");
       
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
+
       // Initialize capture variables
       we_captured = 0;
       coeff_data_captured = 16'h0000;
@@ -366,16 +379,21 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       -----------------------------------------------------------------------*/
       scb.init_test("Test 8: DATA_IN write triggers DSP SEND handshake");
 
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
+
       // Enable DSP
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h01);
       axi_drv.write(axi_tran);
+
+      axi_drv.wait_cycles(2); // Wait a couple of cycles to ensure the axi-lite
+                              // FSM is in IDLE state
 
       // Write a sample to DATA_IN
       axi_tran = new(axi_tran.WRITE, ADDR_DATA_IN, 32'h0000BEEF);
       axi_drv.write(axi_tran);
 
       // After the write completes and the FSM has entered SEND, check outputs
-      //@(dsp_if.cb);
+      @(dsp_if.cb);
       scb.check("t8_dsp_data_in_valid", dsp_if.cb.dsp_data_in_valid == 1,
                $sformatf("dsp_data_in_valid should be 1 in SEND state"));
       scb.check("t8_dsp_data_in", dsp_if.cb.dsp_data_in[15:0] == 16'hBEEF,
@@ -403,6 +421,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- and the value must be readable through AXI at address 0x14.
       -----------------------------------------------------------------------*/
       scb.init_test("Test 9: DSP result captured in DATA_OUT register and readable via AXI");
+
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
 
       // DSP is currently in WAIT_RESULT; deliver a result
       dsp_if.cb.dsp_data_out <= 32'h00001234;
@@ -453,6 +473,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       -----------------------------------------------------------------------*/
       scb.init_test("Test 10: Full write/read round trip for COEFF_DATA");
 
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
+
       axi_tran = new(axi_tran.WRITE, ADDR_COEFF_DATA, 32'h0000ABCD);
       axi_drv.write(axi_tran);
       axi_tran = new(axi_tran.READ, ADDR_COEFF_DATA);
@@ -476,6 +498,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       -----------------------------------------------------------------------*/
       scb.init_test("Test 11: Verifying BRESP=OKAY for valid AXI write");
 
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
+
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
       axi_drv.write(axi_tran);
 
@@ -491,6 +515,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       -----------------------------------------------------------------------*/
       scb.init_test("Test 12: Verifying BRESP=SLVERR for out-of-range AXI write");
 
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
+
       axi_tran = new(axi_tran.WRITE, ADDR_OOB, 32'hDEADBEEF);
       axi_drv.write(axi_tran);
 
@@ -505,6 +531,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- RRESP = "10" (SLVERR) and RDATA = 0x00000000.
       -----------------------------------------------------------------------*/
       scb.init_test("Test 13: Verifying RRESP=SLVERR for out-of-range AXI read");
+
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
 
       axi_tran = new(axi_tran.READ, ADDR_OOB);
       axi_drv.read(axi_tran);
@@ -523,6 +551,8 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
         -- STATUS.BUSY asserted for multiple cycles until dsp_data_out_valid.
       -----------------------------------------------------------------------*/
       scb.init_test("Test 14: STATUS.BUSY held in WAIT_RESULT until result arrives");
+
+      axi_drv.wait_cycles(2); // Ensure we are in a stable state before the test
 
       // Enable DSP and send a sample
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h01);
@@ -566,7 +596,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
 
       scb.general_report();
 
-   #100 $stop; // Stop simulation after some time ("finish" would close ModelSim)
+   #150 $stop; // Stop simulation after some time ("finish" would close ModelSim)
    end 
 
 endmodule
