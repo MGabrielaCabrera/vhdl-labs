@@ -264,19 +264,20 @@ begin
                     if s_axi_arvalid = '1' then
                         read_state     <= HANDSHAKE;
                     end if;
-                    -- -------------------------------------------------------
-                    when HANDSHAKE =>
+                -- -------------------------------------------------------
+                when HANDSHAKE =>
+                    reg_araddr_int <= s_axi_araddr;
                     read_error_lat <= not addr_valid(s_axi_araddr);
                     s_axi_arready  <= '1';
                     read_state     <= EXEC;
-                    if not addr_valid(s_axi_araddr) = '0' then
-                        reg_read_en  <= '1';
-                        reg_raddr    <= s_axi_araddr;
-                    end if;
                 -- -------------------------------------------------------
+                -- Assert read enable for one cycle so the register
+                -- can provide data; capture result on the next cycle
                 when EXEC =>
                     s_axi_arready  <= '0';
                     if read_error_lat = '0' then
+                        reg_read_en  <= '1';
+                        reg_raddr    <= reg_araddr_int;
                         s_axi_rresp  <= "00";           -- OKAY
                     else
                         s_axi_rresp  <= "10";           -- SLVERR
