@@ -297,22 +297,24 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       // Ensure DSP is disabled
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
       axi_drv.write(axi_tran);
+      axi_drv.wait_cycles(2);
 
       fork
+         begin
+             // Write coefficient data
+             axi_tran = new(axi_tran.WRITE, ADDR_COEFF_DATA, 32'h00001234);
+             axi_drv.write(axi_tran);
+         end
          begin
             // Wait for dsp_coeff_we to go high
             wait (dsp_if.cb.dsp_coeff_we == 1);
             we_captured = 1;
             coeff_data_captured = dsp_if.cb.dsp_coeff_data[15:0];
          end
-         begin
-             // Write coefficient data
-             axi_tran = new(axi_tran.WRITE, ADDR_COEFF_DATA, 32'h00001234);
-             axi_drv.write(axi_tran);
-         end
+
       join_any
 
-      // It is expected that first thread finishes before the second one, because the axi-lite 
+      // It is expected that second thread finishes before the first one, because the axi-lite 
       // handshake takes longer to complete 
       scb.check("t6_dsp_coeff_we", we_captured == 1,
                $sformatf("dsp_coeff_we should be 1 during LOAD_COEFF state"));
@@ -343,22 +345,23 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       // Ensure DSP is disabled
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
       axi_drv.write(axi_tran);
+      axi_drv.wait_cycles(2);
 
       fork
+         begin
+             // Write coefficient address
+             axi_tran = new(axi_tran.WRITE, ADDR_COEFF_ADDR, 32'h0F);
+             axi_drv.write(axi_tran);
+         end
          begin
             // Wait for dsp_coeff_we to go high
             wait (dsp_if.cb.dsp_coeff_we == 1);
             we_captured = 1;
             coeff_addr_captured = dsp_if.cb.dsp_coeff_addr;
          end
-         begin
-             // Write coefficient address
-             axi_tran = new(axi_tran.WRITE, ADDR_COEFF_ADDR, 32'h0F);
-             axi_drv.write(axi_tran);
-         end
       join_any
 
-      // It is expected that first thread finishes before the second one, because the axi-lite 
+      // It is expected that second thread finishes before the first one, because the axi-lite 
       // handshake takes longer to complete 
       scb.check("t7_dsp_coeff_addr", coeff_addr_captured == 8'h0F,
                $sformatf("dsp_coeff_addr should be 0x0F, got %h", dsp_if.cb.dsp_coeff_addr));
