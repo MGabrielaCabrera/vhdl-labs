@@ -505,7 +505,12 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
 
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h00);
       axi_drv.write(axi_tran);
-
+      
+      axi_drv.wait_cycles(2); // Wait a cycle to ensure the write response is sampled
+                              // Write task is a fork-join_any, so the response might
+                              // be sampled before the slave has a chance to set it 
+                              //to OKAY. By waiting for 2 cycles, we ensure that we
+                              // are sampling after the slave has set the response.
       scb.check("t11_bresp", axi_tran.resp == 2'b00,
                $sformatf("BRESP should be OKAY (00) for write to valid address"));
 
@@ -523,6 +528,11 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       axi_tran = new(axi_tran.WRITE, ADDR_OOB, 32'hDEADBEEF);
       axi_drv.write(axi_tran);
 
+      axi_drv.wait_cycles(2); // Wait a cycle to ensure the write response is sampled.
+                              // Write task is a fork-join_any, so the response might
+                              // be sampled before the slave has a chance to set it
+                              // to SLVERR. By waiting for 2 cycles, we ensure that
+                              // we are sampling after the slave has set the response.
       scb.check("t12_bresp", axi_tran.resp == 2'b10,
                $sformatf("BRESP should be SLVERR (10) for out-of-range write"));
 
