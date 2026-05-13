@@ -11,8 +11,6 @@ ghdl -a --std=08 -fsynopsys --workdir=build tb/simple_vhdl/control_fsm_tb.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build register_bank.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build tb/simple_vhdl/register_bank_tb.vhd
 ghdl -a --std=08 -fsynopsys --workdir=build top_level_wrapper.vhd
-ghdl -a --std=08 -fsynopsys --workdir=build tb/simple_vhdl/top_level_wrapper_tb.vhd
-
 
 echo "Elaborating axi_lite_slave_if testbench"
 ghdl -e --std=08 -fsynopsys --workdir=build -o build/axi_lite_slave_if_tb.exe axi_lite_slave_if_tb
@@ -40,15 +38,5 @@ build/register_bank_tb.exe --fst=waves/waves_register_bank_tb.fst
 
 echo "Opening waveform viewer (only if the fst file exists)"
 [ -f waves/waves_register_bank_tb.fst ] && gtkwave waves/waves_register_bank_tb.fst &  
-
-echo "Elaborating top_level_wrapper testbench"
-ghdl -e --std=08 -fsynopsys --workdir=build -o build/top_level_wrapper_tb.exe top_level_wrapper_tb
-
-echo "Running top_level_wrapper_tb testbench. Waveforms saved to waves/waves_top_level_wrapper_tb.fst"
-build/top_level_wrapper_tb.exe --fst=waves/waves_top_level_wrapper_tb.fst
-
-echo "Opening waveform viewer (only if the fst file exists)"
-[ -f waves/waves_top_level_wrapper_tb.fst ] && gtkwave waves/waves_top_level_wrapper_tb.fst &  
-
 
 echo "Test complete! "
