@@ -570,6 +570,7 @@ module automatic test(axi_lite_if.TB axi_if, external_dsp_if.TB dsp_if);
       // Enable DSP and send a sample
       axi_tran = new(axi_tran.WRITE, ADDR_CTRL, 32'h01);
       axi_drv.write(axi_tran);
+      axi_drv.wait_cycles(2); // Ensure FSM is in IDLE before sending data
       axi_tran = new(axi_tran.WRITE, ADDR_DATA_IN, 32'h00005A5A);
       axi_drv.write(axi_tran);
 
