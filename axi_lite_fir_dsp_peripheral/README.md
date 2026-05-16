@@ -6,7 +6,9 @@ In the initial phase, data and coefficients are transferred to the DSP through i
 **The spec can be found in doc/AXI-Lite FIR DSP Peripheral - Design Spec.pdf**
 
 ## Simulation
-All modules in this project have been individually simulated using VHDL testbenches with VHDL assertions (simple test approach). The detailed results and waveforms are documented in the verification document located in the `doc/` folder.
+All modules in this project (`axi_lite_slave_if`, `control_fsm` and `register_bank`) have been individually simulated using VHDL testbenches with VHDL assertions (simple test approach). The detailed results and waveforms are documented in the verification document located in the `doc/` folder.
+
+For these tb files, there is a run.sh script that automates compilation and simulation using GHDL, with waveform visualization through GTKWave.
 
 ### Top-Level Simulation (SV)
 
